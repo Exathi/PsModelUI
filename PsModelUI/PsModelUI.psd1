@@ -7,7 +7,7 @@
     ModuleVersion = '1.0.0'
 
     # Supported PSEditions
-    # CompatiblePSEditions = @()
+    CompatiblePSEditions = @('Desktop', 'Core')
 
     # ID used to uniquely identify this module
     GUID = 'aea59f7f-24ad-43e1-9ec0-1313dc6a3d4e'
@@ -22,7 +22,7 @@
     Copyright = '(c) Daniel Gong. All rights reserved.'
 
     # Description of the functionality provided by this module
-    # Description = ''
+    Description = 'Create a UI with viewmodels and xaml using powershell only.'
 
     # Minimum version of the PowerShell engine required by this module
     PowerShellVersion = '5.1'
