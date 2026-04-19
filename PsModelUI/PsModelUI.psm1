@@ -441,6 +441,7 @@ function New-ViewModel {
         }
     }
 
+    if (!$script:ViewModelThread['Pool'] -or $script:ViewModelThread['Pool'].IsDisposed) { Set-ViewModelPool }
     $DynamicClass.psobject.ViewModelThread = $script:ViewModelThread
 
     $DynamicClass

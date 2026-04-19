@@ -4,7 +4,7 @@
     RootModule = 'PsModelUI.psm1'
 
     # Version number of this module.
-    ModuleVersion = '1.0.0'
+    ModuleVersion = '1.0.1'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Desktop', 'Core')
