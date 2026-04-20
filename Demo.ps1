@@ -117,10 +117,16 @@ $MainViewModel.DataGridJobs = [System.Collections.ObjectModel.ObservableCollecti
 
 # Load window
 $View = if ($PSVersionTable.PSVersion.Major -eq 5) {
-    "$PSScriptRoot\MainWindowWindowsPowershell.xaml"
+    "$PSScriptRoot\DemoXaml\MainWindowWindowsPowershell.xaml"
 } else {
-    "$PSScriptRoot\MainWindowPwsh.xaml"
+    "$PSScriptRoot\DemoXaml\MainWindowPwsh.xaml"
 }
 
 $Window = New-WpfObject -Path $View -DataContext $MainViewModel
+
+$ResourceDictionary = New-WpfObject -Path "$PSScriptRoot\DemoXaml\LightTheme.xaml"
+$Window.Resources.MergedDictionaries.Add($ResourceDictionary)
+$ResourceDictionary = New-WpfObject -Path "$PSScriptRoot\DemoXaml\Common.xaml"
+$Window.Resources.MergedDictionaries.Add($ResourceDictionary)
+
 $Window.ShowDialog()

@@ -1,19 +1,19 @@
 <Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    Title="ps7"
-    ThemeMode="Dark"
+    Title="PsModelUI 7"
+    ThemeMode="Light"
     WindowStartupLocation="CenterScreen"
     Width="640"
     Height="720">
     <Grid>
-        <TabControl Margin="5">
+        <TabControl>
             <TabItem>
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock FontFamily="{StaticResource SymbolThemeFontFamily}"
-                            Text="&#xF164;" VerticalAlignment="Center"
+                            Text="&#xE700;" VerticalAlignment="Center"
                             Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
-                        <TextBlock Text="LongTask" Margin="5"
+                        <TextBlock Text="LongTask Function DotSource" Margin="5"
                             Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                     </StackPanel>
                 </TabItem.Header>
@@ -26,16 +26,44 @@
                         <RowDefinition Height="50" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Grid.Column="0" VerticalAlignment="Center"
-                        HorizontalAlignment="Center">
+                    <Grid Grid.Row="0" Grid.Column="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="30" />
+                            <RowDefinition Height="30" />
+                            <RowDefinition Height="30" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition MinWidth="150" Width=".5*" />
+                            <ColumnDefinition MinWidth="200" Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="LongTaskView" FontWeight="SemiBold"
+                            HorizontalAlignment="Left" VerticalAlignment="Center" Grid.Row="1"
+                            Grid.Column="1" />
                         <TextBlock Text="{Binding LongTaskView}" FontSize="20" FontWeight="Bold"
-                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            HorizontalAlignment="Left" VerticalAlignment="Center"
+                            Grid.Row="1" Grid.Column="2" />
+
+                        <TextBlock Text="SampleFunctionView" FontWeight="SemiBold"
+                            HorizontalAlignment="Left" VerticalAlignment="Center" Grid.Row="2"
+                            Grid.Column="1" />
                         <TextBlock Text="{Binding SampleFunctionView}" FontSize="20"
-                            FontWeight="Bold" HorizontalAlignment="Center"
-                            VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding DotSourcedView}" FontSize="20" FontWeight="Bold"
-                            HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </StackPanel>
+                            FontWeight="Bold" HorizontalAlignment="Left"
+                            VerticalAlignment="Center" Grid.Row="2" Grid.Column="2" />
+
+                        <TextBlock Text="DotSourcedView" FontWeight="SemiBold"
+                            HorizontalAlignment="Left" VerticalAlignment="Center" Grid.Row="3"
+                            Grid.Column="1" />
+                        <TextBlock Text="{Binding DotSourcedView}" FontSize="20"
+                            FontWeight="Bold"
+                            HorizontalAlignment="Left" VerticalAlignment="Center" Grid.Row="3"
+                            Grid.Column="2" />
+
+                    </Grid>
                     <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal"
                         HorizontalAlignment="Center">
                         <Button Name="LongTask" Content="LongTask"
@@ -83,10 +111,11 @@
                         AutoGenerateColumns="False">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Id"
-                                Width="25"
+                                Width="Auto"
                                 Binding="{Binding Path=Id}" />
                             <DataGridTextColumn Header="Type"
-                                Width="50"
+                                Width="Auto"
+                                MinWidth="100"
                                 Binding="{Binding Path=Type}" />
                             <DataGridTextColumn Header="Time"
                                 Width="*"
@@ -126,10 +155,11 @@
                     <StackPanel Grid.Row="3" Orientation="Horizontal">
                         <Button Name="ProgressButtonStart" Content="Start"
                             Command="{Binding ProgressBarCommand}"
-                            Style="{DynamicResource AccentButtonStyle}" Margin="5" Width="80"
+                            Style="{DynamicResource AccentButtonStyle}" Margin="5" Width="100"
                             HorizontalAlignment="Left" />
                         <Button Name="ProgressButtonPause" Content="{Binding Status}"
-                            Command="{Binding ProgressPauseCommand}" Margin="5" Width="80"
+                            Command="{Binding ProgressPauseCommand}"
+                            Style="{DynamicResource AccentButtonStyle}" Margin="5" Width="100"
                             HorizontalAlignment="Left" />
                     </StackPanel>
                 </Grid>
