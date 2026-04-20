@@ -517,6 +517,7 @@ function Set-ViewModelPool {
     )
 
     $State = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+    $State.ThrowOnRunspaceOpenError = $true
 
     foreach ($Name in $Functions) {
         $FunctionDefinition = Get-Content "Function:\$Name" -ErrorAction Stop
