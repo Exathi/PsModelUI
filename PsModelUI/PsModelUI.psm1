@@ -582,10 +582,6 @@ function New-WpfObject {
         .PARAMETER Path
         The full name to the xaml file to be parsed.
 
-        .PARAMETER BaseUri
-        Path to the root folder of xaml files. Must end with backslash '\' if pointing to a folder.
-        Allows relative sources in the xaml. <ResourceDictionary Source="Common.Xaml" /> where Common.Xaml is allowed vs hard coding the fullpath C:\folder\Common.Xaml.
-
         .PARAMETER DataContext
         The ViewModel class object that the WpfObject will use.
 
@@ -606,7 +602,6 @@ function New-WpfObject {
 
     begin {
         Add-Type -AssemblyName PresentationFramework -ErrorAction Stop
-        if (!$BaseUri.EndsWith("$([System.IO.Path]::DirectorySeparatorChar)")) { $BaseUri = "$BaseUri$([System.IO.Path]::DirectorySeparatorChar)" }
     }
 
     process {
@@ -619,14 +614,7 @@ function New-WpfObject {
             $Xml.InnerXml
         }
 
-        $WpfObject = if ($PSCmdlet.ParameterSetName -in @('PathDynamic', 'HereStringDynamic')) {
-            $ParserContext = [System.Windows.Markup.ParserContext]::new()
-            $ParserContext.BaseUri = [System.Uri]::new($BaseUri, [System.UriKind]::Absolute)
-
-            [System.Windows.Markup.XamlReader]::Parse($RawXaml, $ParserContext)
-        } else {
-            [System.Windows.Markup.XamlReader]::Parse($RawXaml)
-        }
+        $WpfObject = [System.Windows.Markup.XamlReader]::Parse($RawXaml)
 
         if ($DataContext) {
             # because $DataContext can be created unbound, it may not have the same dispatcher as $WpfObject so it is set here.
