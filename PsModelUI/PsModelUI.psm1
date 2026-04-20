@@ -283,7 +283,7 @@ class ActionCommand : ViewModelBase, System.Windows.Input.ICommand {
     $ActionObject
     $CanExecuteAction
     $Workers = 0
-    $Throttle = 0
+    $Throttle = 1
     $RaiseCanExecuteChangedDelegate
     $RemoveWorkerDelegate
 }
@@ -473,7 +473,7 @@ function New-ViewModelMethod {
         [Parameter(Mandatory)]
         [scriptblock]$MethodBody,
         [string[]]$MethodParameterNames,
-        [int]$Throttle = 0,
+        [int]$Throttle = 1,
         [bool]$IsAsync = $true
     )
 
@@ -557,7 +557,7 @@ function New-ActionCommand {
         [string]$MethodName,
         [bool]$IsAsync = $true,
         [object]$Target,
-        [int]$Throttle = 0
+        [int]$Throttle = 1
     )
 
     $Method = if ($Target.GetType().Name -eq 'PSCustomObject') {
