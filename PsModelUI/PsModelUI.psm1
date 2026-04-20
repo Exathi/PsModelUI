@@ -1,7 +1,9 @@
 Add-Type -AssemblyName PresentationFramework, WindowsBase -ErrorAction Stop
 
 $script:Powershell = $null
-$script:ViewModelThread = [System.Collections.Concurrent.ConcurrentDictionary[string, object]]::new()
+
+# Use an object so we can hot swap the runspacepool on calls to Set-ViewModelPool on all ViewModels if needed.
+$script:ViewModelThread = [System.Collections.Concurrent.ConcurrentDictionary[string, System.Management.Automation.Runspaces.RunspacePool]]::new()
 
 function New-UnboundClassInstance ([type] $type, [object[]] $arguments = $null, [scriptblock]$definition) {
     if ($null -eq $script:Powershell) {
@@ -65,7 +67,7 @@ class ViewModelBase : PSCustomObject, System.ComponentModel.INotifyPropertyChang
     }
 
     [void]AddPropertyChangedToProperties([string[]]$Exclude) {
-        $PropertiesToExclude = 'PropertyChanged', 'Dispatcher', 'ViewModelThread', 'LastAction' + $Exclude
+        $PropertiesToExclude = 'PropertyChanged', 'Dispatcher', 'ViewModelThread', 'LastAction', 'UpdateWithDispatcherDelegate' + $Exclude
         $this.psobject.psobject.Members.Where({
                 $_.MemberType -eq 'Property' -and
                 $_.IsSettable -eq $true -and
@@ -181,7 +183,7 @@ class ViewModelBase : PSCustomObject, System.ComponentModel.INotifyPropertyChang
     }
 
     $Dispatcher #= [System.Windows.Threading.Dispatcher]::CurrentDispatcher # requires types to be loaded in ScriptsToProcess
-    [System.Collections.Concurrent.ConcurrentDictionary[string, object]]$ViewModelThread
+    [System.Collections.Concurrent.ConcurrentDictionary[string, System.Management.Automation.Runspaces.RunspacePool]]$ViewModelThread
     [System.Threading.Tasks.Task]$LastAction
     $UpdateWithDispatcherDelegate
 }
@@ -237,10 +239,8 @@ class ActionCommand : ViewModelBase, System.Windows.Input.ICommand {
         $this.psobject.Target = $Target
         $this.psobject.Throttle = $Throttle
 
-        # Start added for Windows Powershell compatibility
         $this.psobject.RaiseCanExecuteChangedDelegate = $this.psobject.CreateDelegate($this.psobject.RaiseCanExecuteChanged)
         $this.psobject.RemoveWorkerDelegate = $this.psobject.CreateDelegate($this.psobject.RemoveWorker)
-        # End added for Windows Powershell compatibility
 
         @('Workers').ForEach(
             {
@@ -284,11 +284,8 @@ class ActionCommand : ViewModelBase, System.Windows.Input.ICommand {
     $CanExecuteAction
     $Workers = 0
     $Throttle = 0
-
-    # Start added for Windows Powershell compatibility
     $RaiseCanExecuteChangedDelegate
     $RemoveWorkerDelegate
-    # End added for Windows Powershell compatibility
 }
 
 function New-ViewModel {
@@ -398,17 +395,15 @@ function New-ViewModel {
 
     # end class definition
     $null = $StringBuilder.AppendLine('}')
-    # foreach ($Line in $MethodBody.Ast.EndBlock.Statements) {
-    #     $null = $StringBuilder.AppendLine($Line.Extent.Text)
-    # }
 
+    # find all $this references from preliminary definition
     $DefinitionBeforeVariables = ([scriptblock]::Create($StringBuilder.ToString()))
-
     $ClassProperties = $DefinitionBeforeVariables.Ast.FindAll({ $args[0] -is [System.Management.Automation.Language.VariableExpressionAst] }, $true) | Where-Object { $_.VariablePath.UserPath -eq 'this' }
 
     # remove the newline and closing brace to add $this variables as properties from methods.
     $null = $StringBuilder.Remove($StringBuilder.Length - 3, 3)
 
+    # get all unique $this properties and add them as $property if not added in $PropertyNames
     $UniqueProperties = [System.Collections.Generic.HashSet[string]]::new()
     foreach ($Property in $ClassProperties.Parent.Member.Extent.Text) {
         if ([string]::IsNullOrWhiteSpace($Property)) { continue }
@@ -420,6 +415,7 @@ function New-ViewModel {
         $null = $StringBuilder.AppendLine('${0}' -f $Property)
     }
 
+    # finish class definition
     $null = $StringBuilder.AppendLine('}')
 
     if ($AsString) {
@@ -435,6 +431,7 @@ function New-ViewModel {
         [activator]::CreateInstance($ClassName)
     }
 
+    # add a command property for each method
     if ($CreateMethodCommand) {
         foreach ($PSMethod in $Methods) {
             $DynamicClass."$($PSMethod.MethodName)Command" = New-ActionCommand -MethodName $PSMethod.MethodName -Target $DynamicClass -Throttle $PSMethod.Throttle -IsAsync $PSMethod.IsAsync
@@ -507,7 +504,7 @@ function Set-ViewModelPool {
         Name of the function defined inline to be available in the runspacepool.
 
         .PARAMETER StartupScripts
-        Full paths of the scripts to run in the runspacepool on open.
+        Full paths of the scripts to run in the new runspace created by the runspacepool.
     #>
     [CmdletBinding()]
     param (
@@ -533,6 +530,7 @@ function Set-ViewModelPool {
     }
 
     $script:ViewModelThread['Pool'] = [RunspaceFactory]::CreateRunspacePool(1, $MaxRunspaces, $State, (Get-Host))
+    $script:ViewModelThread['Pool'].CleanupInterval = [timespan]::FromMinutes(5)
     $script:ViewModelThread['Pool'].Open()
 }
 
@@ -600,10 +598,6 @@ function New-WpfObject {
         [string]$BaseUri,
         [ViewModelBase]$DataContext
     )
-
-    begin {
-        Add-Type -AssemblyName PresentationFramework -ErrorAction Stop
-    }
 
     process {
         $Xml = [xml]::new()
