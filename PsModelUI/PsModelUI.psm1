@@ -295,6 +295,17 @@ function New-ViewModel {
         Properties preceeed by `$this` used in Methods that aren't defined in PropertyNames will automatically be defined as a property of the class.
         Method overloads are not supported.
 
+        Allows for classes of the same type name with different properties and methods but allows for hot reloading of classes.
+
+        .EXAMPLE
+        $A = New-ViewModel -ClassName 'ClassType' -PropertyNames 'One'
+        $B = New-ViewModel -ClassName 'ClassType' -PropertyNames 'One'
+        $A.psobject.GetType() -eq $B.psobject.GetType() # true
+
+        $A = New-ViewModel -ClassName 'ClassType' -PropertyNames 'One'
+        $B = New-ViewModel -ClassName 'ClassType' -PropertyNames 'One', 'Two'
+        $A.psobject.GetType() -eq $B.psobject.GetType() # false
+
         .PARAMETER ClassName
         The name of the class
         'MyClass'
@@ -340,6 +351,7 @@ function New-ViewModel {
 
         .PARAMETER CreateMethodCommand
         Creates a Command object for each method in $Methods that is populated with an [ActionCommand]
+        Overloads are not supported.
 
         class ViewModel : ViewModelBase {
             $DoMethodCommand
@@ -354,7 +366,10 @@ function New-ViewModel {
     [CmdletBinding()]
     param (
         [string]$ClassName,
+        [Parameter(ParameterSetName = 'AsObject')]
         [string[]]$PropertyNames,
+        [Parameter(ParameterSetName = 'AsTypeWithDefinition')]
+        [pscustomobject[]]$Properties,
         [pscustomobject[]]$Methods,
         [bool]$Unbound = $true,
         [bool]$CreateMethodCommand = $true,
@@ -374,8 +389,20 @@ function New-ViewModel {
         $null = $StringBuilder.AppendLine(('${0}' -f $Name))
     }
 
+    foreach ($ClassProperty in $Properties) {
+        if ($ClassProperty.Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
+        $null = $StringBuilder.AppendLine(('[{0}]${1}' -f $ClassProperty.Type, $ClassProperty.Name))
+    }
+
     # base constructor
-    $null = $StringBuilder.AppendLine(('{0}(){{}}' -f $ClassName))
+    $null = $StringBuilder.AppendLine(('{0}(){{' -f $ClassName))
+
+    foreach ($ClassProperty in $Properties) {
+        $null = $StringBuilder.AppendLine(('$this.{0} = [scriptblock]::Create(",({1})").InvokeReturnAsIs()' -f $ClassProperty.Name, $ClassProperty.Initialization.ToString()))
+    }
+
+    $null = $StringBuilder.AppendLine(('}}' -f $ClassName))
+
 
     # methods
     foreach ($PSMethod in $Methods) {
@@ -408,6 +435,7 @@ function New-ViewModel {
     foreach ($Property in $ClassProperties.Parent.Member.Extent.Text) {
         if ([string]::IsNullOrWhiteSpace($Property)) { continue }
         if ($PropertyNames -contains $Property) { continue }
+        if ($Properties.Name -contains $Property) { continue }
         $null = $UniqueProperties.Add($Property)
     }
 
@@ -444,10 +472,59 @@ function New-ViewModel {
     $DynamicClass
 }
 
+function New-ClassProperty {
+    <#
+        .SYNOPSIS
+        Creates a pscustomobject to be consumed by New-ViewModel to create a class property with initial value.
+
+        .PARAMETER PropertyName
+        Name of the property
+
+        .PARAMETER Type
+        Type of the property
+        'string'
+        ([string])
+        'object'
+        'int'
+        ([System.Collections.Generic.List[object]])
+
+        .PARAMETER Initialization
+        A scriptblock containing the initial value or object to create.
+        Similar to list initialization in C++. Same braces!
+
+        { 123 }
+        { [System.Collections.Generic.List[object]]::new() }
+
+        .EXAMPLE
+        New-ViewModelProperty -PropertyName 'a' -Type int -Initialization {1+1}
+        The above will be consumed in New-ViewModel to generate:
+
+        class Sample {
+            [int]$a
+            Sample() {
+                $this.a = {1+1}.InvokeReturnAsIs()
+            }
+        }
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [string]$Name,
+        [type]$Type,
+        [scriptblock]$Initialization
+    )
+
+    [pscustomobject]@{
+        Name = $Name
+        Type = if ($Type) { $Type } else { [object] }
+        Initialization = if ($Initialization) { $Initialization } else { [scriptblock]::create() }
+    }
+}
+
 function New-ViewModelMethod {
     <#
         .SYNOPSIS
-        Creates a pscustomobject to be consumed by New-ViewModel.
+        Creates a pscustomobject to be consumed by New-ViewModel to create a class method.
         Overloads are not supported.
 
         .PARAMETER MethodName
