@@ -1,5 +1,5 @@
 # PsModelUI - Powershell with Wpf and Databinding
-[![Static Badge](https://img.shields.io/badge/Powershell%20Gallery-1.0.1-blue)](https://www.powershellgallery.com/packages/PsModelUI/)
+[![Static Badge](https://img.shields.io/badge/Powershell%20Gallery-1.1.0-blue)](https://www.powershellgallery.com/packages/PsModelUI/)
 
 ### Challenge
 1. To write a GUI in Windows Powershell and Pwsh 7.5+
@@ -7,7 +7,7 @@
 3. Limited to resources that come natively with Windows 11.
 
 ### Result
-An **Asynchronous** PowerShell UI! Supported by a ViewModel and Command Bindings. Bonus updated theming with Pwsh 7.5+ that came with .NET 9.
+An **Asynchronous** PowerShell UI! Supported by a **ViewModel** and **Command Bindings**. Bonus updated theming with Pwsh 7.5+ that came with .NET 9.
 
 Revisited and simplified for Pwsh. Previous version is in the archive for those that followed it and for some obscure findings.
 
@@ -15,18 +15,18 @@ Revisited and simplified for Pwsh. Previous version is in the archive for those 
 https://github.com/user-attachments/assets/caaab235-4286-406f-b3a9-e026df59c0e0
 
 
-### Check out the Demo
+## Check out the Demo
 ``` Powershell
 . '.\Demo.ps1'
 ```
 
 
-### Getting Started
+## Getting Started
 
 ``` Powershell
 Import-Module .\PsModelUI
 
-$MethodName = New-ViewModelMethod -MethodName 'MethodName' -MethodBody {
+$MethodName = New-ViewModelMethod -Name 'MethodName' -Body {
     $Random = Get-Random -Min 1 -Max 3000
     Start-Sleep -Milliseconds $Random
     $this.BoundViewProperty = $Random
@@ -58,23 +58,91 @@ $Window.ShowDialog()
 ```
 
 
-### How it works
-Since classes inherit `PSCustomObject`, properties are accessed `$Class.psobject.Property`. It functions as a accessible hidden (but not private or protected) property that will show intellisense after `.psobject`.
+## Features
+### Dynamic Class
+Building a class has never been more verbose! Ever wanted to build your own class through functions? No? Now you can, with all the cons and none of the pros.
 
-While the xaml can bind to `$Class.psobject.Property`, there won't be a way to call PropertyChanged in property setter. The xaml can find and bind to `Add-Member -MemberType ScriptProperty`. Since we inherited `PSCustomObject`, `$Class.Property` no longer exists, therefore we can add property definitions with the same name as the internal property with Getters and Setters for use in the Xaml with `Add-Member`!
+Build parts of a class until you're ready to piece it together.
 
-Now when the property is set with `$Class.Property = $Value`, it can properly call PropertyChanged on the backing property! You can use `$Class.Property` for notifying or access the backing field directly by `$Class.psobject.Property` similar to csharp `$Class.property` and internal `$Class._property`.
+``` Powershell
+$MethodSplat = @{
+	Name = 'ClassMethod'
+	Body = {return 'Hello World'}
+}
+$ClassMethod = New-ViewModelMethod @MethodSplat
 
-With `$ViewModelBase.AddPropertyChangedToProperties`™ (naming is hard), it will expose all non default properties so they can be accessed by `$ViewModelBase.Property`. Properties added this way will automatically call `$ViewModelBase.RaisePropertyChanged` to notify the UI to update.
+$PropertySplat = @{
+	Name = 'ClassProperty'
+	Type = ([string])
+	Initialization = {'I have default a value'}
+}
+$ClassProperty = New-ClassProperty @PropertySplat
 
-Methods will have to be called with `$Class.psobject.ClassMethod()`. This isn't a problem for the ui as buttons are bound to commands that invoke the method. I have not explored adding via `Add-Member -MemberType ScriptMethod`.
+$ClassSplat = @{
+	ClassName = 'DynamicClass'
+	PropertyInitialization = @(
+		$ClassProperty
+	)
+	Methods = @(
+		$ClassMethod
+	)
+	Unbound = $true
+    CreateMethodCommand = $true
+}
+$DynamicClass = New-ViewModel @ClassSplat
 
-Because we execute class methods in a runspace, the class has to be unbound with `NoRunspaceAffinity` or `New-UnboundClassInstance`. For compatibility, `New-UnboundClassInstance` is used internally to create the viewmodels.
+$DynamicClass
+ClassProperty          ClassMethodCommand
+-------------          ------------------
+I have default a value @{Workers=System.Management.Automation.PSScriptProperty}
 
-MethodBodies in `New-ViewModelMethod` can see and use any `$this` properties as it is actually inside a shared class created in `New-ViewModel`
+$DynamicClass.psobject.ClassMethod()
+Hello World
+
+# Class definition as a string
+$ClassSplat.AsString = $true
+$DynamicClassDefinition = New-ViewModel @ClassSplat
+$DynamicClassDefinition
+
+class DynamicClass : ViewModelBase {
+[System.String]$ClassProperty
+DynamicClass(){
+$this.ClassProperty = [scriptblock]::Create(",('I have default a value')").InvokeReturnAsIs()
+}
+$ClassMethodCommand
+[object]ClassMethod() {
+return 'Hello World'
+}
+
+```
 
 
-### Minimal Setup Example
+### Automatic Class Property Declaration
+`New-ViewModel` detects class properties used in class methods but not defined by `New-ClassProperty` and automatically includes it in the class as property of type object.
+
+``` Powershell
+$MethodSplat = @{
+    Name = 'ClassMethod'
+    Body = {$this.AutoClassProperty = 'Hello World'}
+}
+$ClassMethod = New-ViewModelMethod @MethodSplat
+
+$ClassSplat = @{
+    ClassName = 'DynamicClass'
+    Methods = $ClassMethod
+	CreateMethodCommand = $false
+}
+$DynamicClass = New-ViewModel @ClassSplat
+$DynamicClass.psobject.ClassMethod()
+$DynamicClass
+
+AutoClassProperty
+-----------------
+Hello World
+```
+
+
+## Minimal Setup Example
 
 If you want to create the ViewModel class yourself:
 
@@ -183,7 +251,42 @@ $Window.ShowDialog()
 ```
 
 
-### Pwsh and Powershell compatibility
+## How it works
+### Inherit a pscustomobject
+Since classes inherit `PSCustomObject`, properties are accessed `$Class.psobject.Property`. It functions as a accessible hidden (but not private or protected) property that will show intellisense after `.psobject`.
+
+While the xaml can bind to `$Class.psobject.Property`, there won't be a way to call PropertyChanged in property setter. The xaml can find and bind to `Add-Member -MemberType ScriptProperty`. Since we inherited `PSCustomObject`, `$Class.Property` no longer exists, therefore we can add property definitions with the same name as the internal property with Getters and Setters for use in the Xaml with `Add-Member`!
+
+``` Powershell
+[NoRunspaceAffinity()]
+class DemoClass : pscustomobject {
+	$Prop = 'Foo'
+	Method() {$this.Prop = 'bar'}
+}
+$DemoClass = [DemoClass]::new()
+$DemoClass.Prop # nothing
+$DemoClass.psobject.Prop # returns Foo
+```
+
+### Add script properties to a class
+Now when the property is set with `$Class.Property = $Value`, it can properly call PropertyChanged on the backing property! You can use `$Class.Property` for notifying or access the backing field directly by `$Class.psobject.Property` similar to csharp `$Class.property` and internal `$Class._property`.
+
+Methods will have to be called with `$Class.psobject.ClassMethod()`. This isn't a problem for the ui as buttons are bound to commands that invoke the method. I have not explored adding via `Add-Member -MemberType ScriptMethod`.
+
+Because we execute class methods in a runspace, the class has to be unbound with `NoRunspaceAffinity` or `New-UnboundClassInstance`. For windows powershell compatibility, `New-UnboundClassInstance` is used internally to create the viewmodels. Being unbound allows class methods to be invoked accross runspaces.
+
+``` Powershell
+$DemoClass | Add-Member -Name 'Prop' -MemberType ScriptProperty -Value ([scriptblock]::Create('return ,$this.psobject.Prop')) -SecondValue ([scriptblock]::Create('param($value)
+	$this.psobject.Prop = $value
+	#$this.psobject.NotifyPropertyChanged("Prop")'))
+
+$DemoClass.psobject.Method() # sets new value and calls property changed
+$DemoClass.Prop # returns bar
+```
+
+
+
+## Pwsh and Powershell compatibility
 * The main difference is the ViewModel setup.
 
 * Pwsh has access to the attribute `[NoRunspaceAffinity()]`. Powershell 5.1 needs to create the class without a runspace.
@@ -203,6 +306,7 @@ $ViewModel.WriteVerboseMethod()
 PS> VERBOSE: Prints to host
 ```
 
+For times where you need to use the dispatcher:
 ``` Powershell
 # Pwsh can implicitly convert methods to delegates so this is possible.
 $Dispatcher.InvokeAsync($Class.Method)
@@ -215,28 +319,29 @@ $Dispatcher.BeginInvoke(9, $Class.MethodDelegate, $Parameter)
 ```
 
 
-### Updating the view from other runspaces
+## Updating the view from other runspaces
+
+As long as methods do not update the same view property at the same time there is nothing to worry about.
 
 `ActionCommand.Execute` invokes the provided PSMethod in another runspace. It will not run and block on the GUI thread because it is not bound to the runspace it was created in with attribute `[NoRunspaceAffinity()]` and Windows Powershell equivalent.
 
 ``` Powershell
 # Update the view by setting property in class method.
-# Provided that the property was setup with AddPropertyChangedToProperties().
+# Provided that the property was setup with AddPropertyChangedToProperties() and bound in the xaml.
 # Method works as is. Create an ActionCommand.IsAsync = $true to run in a runspace or false to run on the GUI thread.
-[void]$Method() {
+[void]Method() {
 	$NewValue = Invoke-RestMethod
 	$this.Property = $NewValue.Result
 }
 
 # Use the internal method `$this.psobject.UpdateView` if somehow mutliple methods update the same class property at the same time.
 # #Alternatively, use locks.
-[void]$Method() {
+[void]Method() {
 	$NewValue = Invoke-RestMethod
 	$this.psobject.UpdateView([pscustomobject]@{
 		Property = $NewValue.Result
 	})
 }
-
 ```
 
 
