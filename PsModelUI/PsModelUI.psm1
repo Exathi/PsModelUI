@@ -1,35 +1,6 @@
 Add-Type -AssemblyName PresentationFramework, WindowsBase -ErrorAction Stop
-
-$script:Powershell = $null
-
 # Use an object so we can hot swap the runspacepool on calls to Set-ViewModelPool on all ViewModels if needed.
 $script:ViewModelThread = [System.Collections.Concurrent.ConcurrentDictionary[string, System.Management.Automation.Runspaces.RunspacePool]]::new()
-
-function New-UnboundClassInstance ([type] $type, [object[]] $arguments = $null, [scriptblock]$definition) {
-    if ($null -eq $script:Powershell) {
-        $script:Powershell = [powershell]::Create()
-        $script:Powershell.AddScript({
-                function New-UnboundClassInstance ([type] $type, [object[]] $arguments, [scriptblock]$definition) {
-                    if ($definition) { $definition.Invoke() }
-                    [activator]::CreateInstance($type, $arguments)
-                }
-            }.Ast.GetScriptBlock()
-        ).Invoke()
-        $script:Powershell.Commands.Clear()
-    }
-
-    try {
-        if ($null -eq $arguments) { $arguments = @() }
-        $result = $script:Powershell.AddCommand('New-UnboundClassInstance').
-        AddParameter('type', $type).
-        AddParameter('arguments', $arguments).
-        AddParameter('definition', $definition).
-        Invoke()
-        return $result
-    } finally {
-        $script:Powershell.Commands.Clear()
-    }
-}
 
 # [NoRunspaceAffinity()]
 class ViewModelBase : PSCustomObject, System.ComponentModel.INotifyPropertyChanged {
@@ -288,23 +259,89 @@ class ActionCommand : ViewModelBase, System.Windows.Input.ICommand {
     $RemoveWorkerDelegate
 }
 
-function New-ViewModel {
+$script:Powershell = $null
+
+function New-UnboundClassInstance ([type] $type, [object[]] $arguments = $null, [scriptblock]$definition) {
+    if ($null -eq $script:Powershell) {
+        $script:Powershell = [powershell]::Create()
+        $script:Powershell.AddScript({
+                function New-UnboundClassInstance ([type] $type, [object[]] $arguments, [scriptblock]$definition) {
+                    if ($definition) { $definition.Invoke() }
+                    [activator]::CreateInstance($type, $arguments)
+                }
+            }.Ast.GetScriptBlock()
+        ).Invoke()
+        $script:Powershell.Commands.Clear()
+    }
+
+    try {
+        if ($null -eq $arguments) { $arguments = @() }
+        $result = $script:Powershell.AddCommand('New-UnboundClassInstance').
+        AddParameter('type', $type).
+        AddParameter('arguments', $arguments).
+        AddParameter('definition', $definition).
+        Invoke()
+        return $result
+    } finally {
+        $script:Powershell.Commands.Clear()
+    }
+}
+
+function New-ActionCommand {
+    <#
+        .SYNOPSIS
+        Creates an [ActionCommand] object with the provided method in $Target.
+
+        .PARAMETER MethodName
+        Name of the method in $Target.
+
+        .PARAMETER IsAsync
+        This signals the equivalent command to be invoked in another runspace if $true or on the console thread.
+
+        .PARAMETER Target
+        The class object of the method.
+
+        .PARAMETER Throttle
+        The max number of times the equivalent method command can be running at a given time.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [string]$MethodName,
+        [bool]$IsAsync = $true,
+        [object]$Target,
+        [int]$Throttle = 1
+    )
+
+    $Method = if ($Target.GetType().Name -eq 'PSCustomObject') {
+        $Target.psobject.$MethodName
+    } else {
+        $Target.$MethodName
+    }
+
+    [ActionCommand]::new($Method, $IsAsync, $Target, $Throttle)
+}
+
+function New-Class {
     <#
         .SYNOPSIS
         Dynamically creates a class object that inherits ViewModeBase.
-        Properties preceeed by `$this` used in Methods that aren't defined in PropertyNames will automatically be defined as a property of the class.
+        Properties preceeed by `$this` used in Methods that aren't defined in PropertyDeclaration will automatically be defined as a property of the class.
         Method overloads are not supported.
 
         Allows for classes of the same type name with different properties and methods but allows for hot reloading of classes.
 
         .EXAMPLE
-        $A = New-ViewModel -ClassName 'ClassType' -PropertyNames 'One'
-        $B = New-ViewModel -ClassName 'ClassType' -PropertyNames 'One'
-        $A.psobject.GetType() -eq $B.psobject.GetType() # true
-
-        $A = New-ViewModel -ClassName 'ClassType' -PropertyNames 'One'
-        $B = New-ViewModel -ClassName 'ClassType' -PropertyNames 'One', 'Two'
-        $A.psobject.GetType() -eq $B.psobject.GetType() # false
+        $A = New-ViewModel -ClassName 'ClassType' -PropertyDeclaration 'One'
+        $B = New-ViewModel -ClassName 'ClassType' -PropertyInitialization ([pscustomobject]@{
+            Name = 'NewProperty'
+            Type = ([string])
+            Initialization = 'Hello World'
+        })
+        $C = New-ViewModel -ClassName 'ClassType' -Methods ([pscustomobject]@{
+            Name = 'ClassMethod'
+	        Body = {return 'Hello World'}
+        })
 
         .PARAMETER ClassName
         The name of the class
@@ -315,7 +352,25 @@ function New-ViewModel {
             MyClass() {}
         }
 
-        .PARAMETER PropertyNames
+        .PARAMETER Inherits
+        The name of the class to inherit and interface names.
+        Follows powershell interitance so only ONE class can be inherited and any dotnet interfaces can be added.
+
+        'Foo', 'System.IDisposable', System.ComponentModel.INotifyPropertyChanged
+
+        class Foo {
+            $Property = 1
+        }
+
+        class Bar : Foo, System.IDisposable, System.ComponentModel.INotifyPropertyChanged {
+            $NewProperty = 2
+            Dispose(){}
+            $PropertyChanged
+            add_PropertyChanged([System.ComponentModel.PropertyChangedEventHandler]$handler) {}
+            remove_PropertyChanged([System.ComponentModel.PropertyChangedEventHandler]$handler) {}
+        }
+
+        .PARAMETER PropertyDeclaration
         Takes an array of strings.
         @('property1', 'PropertY2')
 
@@ -327,11 +382,11 @@ function New-ViewModel {
         }
 
         .PARAMETER Methods
-        Will also create class properties for methods that call $this.propertyname that isn't in $PropertyNames
-        Requires a hashtable of name and it's methodbody as a scriptblock
+        Will also create class properties for methods that call $this.propertyname that isn't in $PropertyDeclaration
+        Requires a hashtable of name and it's Body as a scriptblock
         @(
             DoMethod = {return 'hello world'}
-            OtherMethod = {$this.Property = 'foo'} # if '$Property' is not defined in PropertyNames, it will be added automatically.
+            OtherMethod = {$this.Property = 'foo'} # if '$Property' is not defined in PropertyDeclaration, it will be added automatically.
         )
 
         Creates:
@@ -349,30 +404,20 @@ function New-ViewModel {
         .PARAMETER Unbound
         Creates the class with no runspace affinity if $true. Otherwise class methods cannot be called when the UI is running.
 
-        .PARAMETER CreateMethodCommand
-        Creates a Command object for each method in $Methods that is populated with an [ActionCommand]
-        Overloads are not supported.
-
-        class ViewModel : ViewModelBase {
-            $DoMethodCommand
-            [object]DoMethod() {
-                return "hello world"
-            }
-        }
-
         .PARAMETER AsString
         Returns the full class definition as a string instead of the object.
     #>
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'AsObject')]
     param (
+        [Parameter(Mandatory)]
         [string]$ClassName,
+        [string[]]$Inherits,
         [Parameter(ParameterSetName = 'AsObject')]
-        [string[]]$PropertyNames,
+        [string[]]$PropertyDeclaration,
         [Parameter(ParameterSetName = 'AsTypeWithDefinition')]
-        [pscustomobject[]]$Properties,
+        [pscustomobject[]]$PropertyInitialization,
         [pscustomobject[]]$Methods,
         [bool]$Unbound = $true,
-        [bool]$CreateMethodCommand = $true,
         [switch]$AsString
     )
 
@@ -380,16 +425,19 @@ function New-ViewModel {
 
     # start class line
     $null = $StringBuilder.Append("class $ClassName")
-    $null = $StringBuilder.Append(' : ViewModelBase')
+    if ($Inherits) {
+        $null = $StringBuilder.Append(' : ')
+        $null = $StringBuilder.Append(($Inherits -join ','))
+    }
     $null = $StringBuilder.AppendLine(' {')
 
     # class properties
-    foreach ($Name in $PropertyNames) {
+    foreach ($Name in $PropertyDeclaration) {
         if ($Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
         $null = $StringBuilder.AppendLine(('${0}' -f $Name))
     }
 
-    foreach ($ClassProperty in $Properties) {
+    foreach ($ClassProperty in $PropertyInitialization) {
         if ($ClassProperty.Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
         $null = $StringBuilder.AppendLine(('[{0}]${1}' -f $ClassProperty.Type, $ClassProperty.Name))
     }
@@ -397,7 +445,7 @@ function New-ViewModel {
     # base constructor
     $null = $StringBuilder.AppendLine(('{0}(){{' -f $ClassName))
 
-    foreach ($ClassProperty in $Properties) {
+    foreach ($ClassProperty in $PropertyInitialization) {
         $null = $StringBuilder.AppendLine(('$this.{0} = [scriptblock]::Create(",({1})").InvokeReturnAsIs()' -f $ClassProperty.Name, $ClassProperty.Initialization.ToString()))
     }
 
@@ -406,17 +454,12 @@ function New-ViewModel {
 
     # methods
     foreach ($PSMethod in $Methods) {
-        # Create a command property for the method and append 'Command' to the end.
-        if ($CreateMethodCommand) {
-            $null = $StringBuilder.AppendLine(('${0}Command' -f $PSMethod.MethodName))
-        }
-
-        if (($PSMethod.MethodBody.Ast.EndBlock.Statements.Where({ $null -ne $_.Pipeline })).Count -eq 0) {
-            $null = $StringBuilder.AppendLine(('[void]{0}({1}) {{' -f $PSMethod.MethodName, $PSMethod.MethodParameterNames))
+        if (($PSMethod.Body.Ast.EndBlock.Statements.Where({ $null -ne $_.Pipeline })).Count -eq 0) {
+            $null = $StringBuilder.AppendLine(('[void]{0}({1}) {{' -f $PSMethod.Name, $PSMethod.MethodParameterNames))
         } else {
-            $null = $StringBuilder.AppendLine(('[object]{0}({1}) {{' -f $PSMethod.MethodName, $PSMethod.MethodParameterNames))
+            $null = $StringBuilder.AppendLine(('[object]{0}({1}) {{' -f $PSMethod.Name, $PSMethod.MethodParameterNames))
         }
-        $null = $StringBuilder.AppendLine($($PSMethod.MethodBody.ToString().Trim()))
+        $null = $StringBuilder.AppendLine($($PSMethod.Body.ToString().Trim()))
         $null = $StringBuilder.AppendLine('}')
     }
 
@@ -430,12 +473,12 @@ function New-ViewModel {
     # remove the newline and closing brace to add $this variables as properties from methods.
     $null = $StringBuilder.Remove($StringBuilder.Length - 3, 3)
 
-    # get all unique $this properties and add them as $property if not added in $PropertyNames
+    # get all unique $this properties and add them as $property if not added in $PropertyDeclaration
     $UniqueProperties = [System.Collections.Generic.HashSet[string]]::new()
     foreach ($Property in $ClassProperties.Parent.Member.Extent.Text) {
         if ([string]::IsNullOrWhiteSpace($Property)) { continue }
-        if ($PropertyNames -contains $Property) { continue }
-        if ($Properties.Name -contains $Property) { continue }
+        if ($PropertyDeclaration -contains $Property) { continue }
+        if ($PropertyInitialization.Name -contains $Property) { continue }
         $null = $UniqueProperties.Add($Property)
     }
 
@@ -457,13 +500,6 @@ function New-ViewModel {
         New-UnboundClassInstance $ClassName
     } else {
         [activator]::CreateInstance($ClassName)
-    }
-
-    # add a command property for each method
-    if ($CreateMethodCommand) {
-        foreach ($PSMethod in $Methods) {
-            $DynamicClass."$($PSMethod.MethodName)Command" = New-ActionCommand -MethodName $PSMethod.MethodName -Target $DynamicClass -Throttle $PSMethod.Throttle -IsAsync $PSMethod.IsAsync
-        }
     }
 
     if (!$script:ViewModelThread['Pool'] -or $script:ViewModelThread['Pool'].IsDisposed) { Set-ViewModelPool }
@@ -521,16 +557,204 @@ function New-ClassProperty {
     }
 }
 
+function New-ViewModel {
+    <#
+        .SYNOPSIS
+        Dynamically creates a class object that inherits ViewModeBase.
+        Properties preceeed by `$this` used in Methods that aren't defined in PropertyDeclaration will automatically be defined as a property of the class.
+        Method overloads are not supported.
+
+        Allows for classes of the same type name with different properties and methods but allows for hot reloading of classes.
+
+        .EXAMPLE
+        $A = New-ViewModel -ClassName 'ClassType' -PropertyDeclaration 'One'
+        $B = New-ViewModel -ClassName 'ClassType' -PropertyInitialization ([pscustomobject]@{
+            Name = 'NewProperty'
+            Type = ([string])
+            Initialization = 'Hello World'
+        })
+        $C = New-ViewModel -ClassName 'ClassType' -Methods ([pscustomobject]@{
+            Name = 'ClassMethod'
+	        Body = {return 'Hello World'}
+        })
+
+        .PARAMETER ClassName
+        The name of the class
+        'MyClass'
+
+        Creates:
+        class MyClass : ViewModeBase {
+            MyClass() {}
+        }
+
+        .PARAMETER PropertyDeclaration
+        Takes an array of strings.
+        @('property1', 'PropertY2')
+
+        Creates:
+
+        class ViewModel : ViewModelBase {
+            $property1
+            $PropertY2
+        }
+
+        .PARAMETER Methods
+        Will also create class properties for methods that call $this.propertyname that isn't in $PropertyDeclaration
+        Requires a hashtable of name and it's Body as a scriptblock
+        @(
+            DoMethod = {return 'hello world'}
+            OtherMethod = {$this.Property = 'foo'} # if '$Property' is not defined in PropertyDeclaration, it will be added automatically.
+        )
+
+        Creates:
+
+        class ViewModel : ViewModelBase {
+            $Property
+            [object]DoMethod() {
+                return "hello world"
+            }
+            [void]OtherMethod() {
+                $this.Property = 'foo'
+            }
+        }
+
+        .PARAMETER Unbound
+        Creates the class with no runspace affinity if $true. Otherwise class methods cannot be called when the UI is running.
+
+        .PARAMETER CreateMethodCommand
+        Creates a Command object for each method in $Methods that is populated with an [ActionCommand]
+        Overloads are not supported.
+
+        class ViewModel : ViewModelBase {
+            $DoMethodCommand
+            [object]DoMethod() {
+                return "hello world"
+            }
+        }
+
+        .PARAMETER AsString
+        Returns the full class definition as a string instead of the object.
+    #>
+    [CmdletBinding(DefaultParameterSetName = 'AsObject')]
+    param (
+        [Parameter(Mandatory)]
+        [string]$ClassName,
+        [Parameter(ParameterSetName = 'AsObject')]
+        [string[]]$PropertyDeclaration,
+        [Parameter(ParameterSetName = 'AsTypeWithDefinition')]
+        [pscustomobject[]]$PropertyInitialization,
+        [pscustomobject[]]$Methods,
+        [bool]$Unbound = $true,
+        [bool]$CreateMethodCommand = $true,
+        [switch]$AsString
+    )
+
+    $StringBuilder = [System.Text.StringBuilder]::new()
+
+    # start class line
+    $null = $StringBuilder.Append("class $ClassName")
+    $null = $StringBuilder.Append(' : ViewModelBase')
+    $null = $StringBuilder.AppendLine(' {')
+
+    # class properties
+    foreach ($Name in $PropertyDeclaration) {
+        if ($Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
+        $null = $StringBuilder.AppendLine(('${0}' -f $Name))
+    }
+
+    foreach ($ClassProperty in $PropertyInitialization) {
+        if ($ClassProperty.Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
+        $null = $StringBuilder.AppendLine(('[{0}]${1}' -f $ClassProperty.Type, $ClassProperty.Name))
+    }
+
+    # base constructor
+    $null = $StringBuilder.AppendLine(('{0}(){{' -f $ClassName))
+
+    foreach ($ClassProperty in $PropertyInitialization) {
+        $null = $StringBuilder.AppendLine(('$this.{0} = [scriptblock]::Create(",({1})").InvokeReturnAsIs()' -f $ClassProperty.Name, $ClassProperty.Initialization.ToString()))
+    }
+
+    $null = $StringBuilder.AppendLine(('}}' -f $ClassName))
+
+
+    # methods
+    foreach ($PSMethod in $Methods) {
+        # Create a command property for the method and append 'Command' to the end.
+        if ($CreateMethodCommand) {
+            $null = $StringBuilder.AppendLine(('${0}Command' -f $PSMethod.Name))
+        }
+
+        if (($PSMethod.Body.Ast.EndBlock.Statements.Where({ $null -ne $_.Pipeline })).Count -eq 0) {
+            $null = $StringBuilder.AppendLine(('[void]{0}({1}) {{' -f $PSMethod.Name, $PSMethod.MethodParameterNames))
+        } else {
+            $null = $StringBuilder.AppendLine(('[object]{0}({1}) {{' -f $PSMethod.Name, $PSMethod.MethodParameterNames))
+        }
+        $null = $StringBuilder.AppendLine($($PSMethod.Body.ToString().Trim()))
+        $null = $StringBuilder.AppendLine('}')
+    }
+
+    # end class definition
+    $null = $StringBuilder.AppendLine('}')
+
+    # find all $this references from preliminary definition
+    $DefinitionBeforeVariables = ([scriptblock]::Create($StringBuilder.ToString()))
+    $ClassProperties = $DefinitionBeforeVariables.Ast.FindAll({ $args[0] -is [System.Management.Automation.Language.VariableExpressionAst] }, $true) | Where-Object { $_.VariablePath.UserPath -eq 'this' }
+
+    # remove the newline and closing brace to add $this variables as properties from methods.
+    $null = $StringBuilder.Remove($StringBuilder.Length - 3, 3)
+
+    # get all unique $this properties and add them as $property if not added in $PropertyDeclaration
+    $UniqueProperties = [System.Collections.Generic.HashSet[string]]::new()
+    foreach ($Property in $ClassProperties.Parent.Member.Extent.Text) {
+        if ([string]::IsNullOrWhiteSpace($Property)) { continue }
+        if ($PropertyDeclaration -contains $Property) { continue }
+        if ($PropertyInitialization.Name -contains $Property) { continue }
+        $null = $UniqueProperties.Add($Property)
+    }
+
+    foreach ($Property in $UniqueProperties.GetEnumerator()) {
+        $null = $StringBuilder.AppendLine('${0}' -f $Property)
+    }
+
+    # finish class definition
+    $null = $StringBuilder.AppendLine('}')
+
+    if ($AsString) {
+        return $StringBuilder.ToString()
+    }
+
+    $Definition = ([scriptblock]::Create($StringBuilder.ToString()))
+    . $Definition
+
+    $DynamicClass = if ($Unbound) {
+        New-UnboundClassInstance $ClassName
+    } else {
+        [activator]::CreateInstance($ClassName)
+    }
+
+    # add a command property for each method
+    if ($CreateMethodCommand) {
+        foreach ($PSMethod in $Methods) {
+            $DynamicClass."$($PSMethod.Name)Command" = New-ActionCommand -MethodName $PSMethod.Name -Target $DynamicClass -Throttle $PSMethod.Throttle -IsAsync $PSMethod.IsAsync
+        }
+    }
+
+    if (!$script:ViewModelThread['Pool'] -or $script:ViewModelThread['Pool'].IsDisposed) { Set-ViewModelPool }
+    $DynamicClass.psobject.ViewModelThread = $script:ViewModelThread
+
+    $DynamicClass
+}
+
 function New-ViewModelMethod {
     <#
         .SYNOPSIS
         Creates a pscustomobject to be consumed by New-ViewModel to create a class method.
         Overloads are not supported.
 
-        .PARAMETER MethodName
+        .PARAMETER Name
         Name of the method to be defined in the class by New-ViewModel.
 
-        .PARAMETER MethodBody
+        .PARAMETER Body
         Body of the method to be defined in the class by New-ViewModel.
         All `$this` references will be of the class. Otherwise it is invalid if invoked as is.
 
@@ -546,9 +770,9 @@ function New-ViewModelMethod {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
-        [string]$MethodName,
+        [string]$Name,
         [Parameter(Mandatory)]
-        [scriptblock]$MethodBody,
+        [scriptblock]$Body,
         [string[]]$MethodParameterNames,
         [int]$Throttle = 1,
         [bool]$IsAsync = $true
@@ -561,11 +785,63 @@ function New-ViewModelMethod {
     $JoinedParameters = $Parameters -join ','
 
     [pscustomobject]@{
-        MethodName = $MethodName
-        MethodBody = $MethodBody.Ast.GetScriptBlock()
+        Name = $Name
+        Body = $Body.Ast.GetScriptBlock()
         MethodParameterNames = $JoinedParameters
         Throttle = $Throttle
         IsAsync = $IsAsync
+    }
+}
+
+function New-WpfObject {
+    <#
+        .SYNOPSIS
+        Creates a WPF object with given Xaml from a string or file
+        Uses the dedicated wpf xaml reader rather than the xmlreader.
+
+        .PARAMETER Xaml
+        The xaml string for to be parsed.
+
+        .PARAMETER Path
+        The full name to the xaml file to be parsed.
+
+        .PARAMETER DataContext
+        The ViewModel class object that the WpfObject will use.
+
+        .EXAMPLE
+        $Window = New-WpfObject -Xaml $Xaml -DataContext $ViewModel
+        $ResourceDictionary = New-WpfObject -Path $Path
+    #>
+    [CmdletBinding(DefaultParameterSetName = 'Path')]
+    param (
+        [Parameter(Mandatory, ValueFromPipeline, Position = 0, ParameterSetName = 'HereString')]
+        [string[]]$Xaml,
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName, Position = 0, ParameterSetName = 'Path')]
+        [ValidateScript({ Test-Path $_ })]
+        [string[]]$Path,
+        [string]$BaseUri,
+        [ViewModelBase]$DataContext
+    )
+
+    process {
+        $Xml = [xml]::new()
+        $RawXaml = if ($PSBoundParameters.ContainsKey('Path')) {
+            $Xml.Load($Path)
+            $Xml.InnerXml
+        } else {
+            $Xml.LoadXml($Xaml)
+            $Xml.InnerXml
+        }
+
+        $WpfObject = [System.Windows.Markup.XamlReader]::Parse($RawXaml)
+
+        if ($DataContext) {
+            # because $DataContext can be created unbound, it may not have the same dispatcher as $WpfObject so it is set here.
+            $DataContext.psobject.Dispatcher = $WpfObject.Dispatcher
+            $WpfObject.DataContext = $DataContext
+        }
+
+        $WpfObject
     }
 }
 
@@ -573,6 +849,11 @@ function Set-ViewModelPool {
     <#
         .SYNOPSIS
         Creates and opens the global runspacepool to be used by each viewmodel created by New-ViewModel.
+
+        .DESCRIPTION
+        Runspacepool is stored in module script scope: $script:ViewModelThread as a concurrent dictionary.
+        It is added to each ViewModel created by New-ViewModel.
+        Will be disposed and recreated on each call.
 
         .PARAMETER MaxRunspaces
         Max number of runspaces in the pool to be available for use.
@@ -611,89 +892,3 @@ function Set-ViewModelPool {
     $script:ViewModelThread['Pool'].Open()
 }
 
-function New-ActionCommand {
-    <#
-        .SYNOPSIS
-        Creates an [ActionCommand] object with the provided method in $Target.
-
-        .PARAMETER MethodName
-        Name of the method in $Target.
-
-        .PARAMETER IsAsync
-        This signals the equivalent command to be invoked in another runspace if $true or on the console thread.
-
-        .PARAMETER Target
-        The class object of the method.
-
-        .PARAMETER Throttle
-        The max number of times the equivalent method command can be running at a given time.
-    #>
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory)]
-        [string]$MethodName,
-        [bool]$IsAsync = $true,
-        [object]$Target,
-        [int]$Throttle = 1
-    )
-
-    $Method = if ($Target.GetType().Name -eq 'PSCustomObject') {
-        $Target.psobject.$MethodName
-    } else {
-        $Target.$MethodName
-    }
-
-    [ActionCommand]::new($Method, $IsAsync, $Target, $Throttle)
-}
-
-function New-WpfObject {
-    <#
-        .SYNOPSIS
-        Creates a WPF object with given Xaml from a string or file
-        Uses the dedicated wpf xaml reader rather than the xmlreader.
-
-        .PARAMETER Xaml
-        The xaml string for to be parsed.
-
-        .PARAMETER Path
-        The full name to the xaml file to be parsed.
-
-        .PARAMETER DataContext
-        The ViewModel class object that the WpfObject will use.
-
-        .EXAMPLE
-        New-WpfObject -Xaml $Xaml -BaseUri "$PSScriptRoot\" -DataContext $ViewModel
-        New-WpfObject -Path $Path -BaseUri "C:\Test\Folder\"
-    #>
-    [CmdletBinding(DefaultParameterSetName = 'Path')]
-    param (
-        [Parameter(Mandatory, ValueFromPipeline, Position = 0, ParameterSetName = 'HereString')]
-        [string[]]$Xaml,
-        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName, Position = 0, ParameterSetName = 'Path')]
-        [ValidateScript({ Test-Path $_ })]
-        [string[]]$Path,
-        [string]$BaseUri,
-        [ViewModelBase]$DataContext
-    )
-
-    process {
-        $Xml = [xml]::new()
-        $RawXaml = if ($PSBoundParameters.ContainsKey('Path')) {
-            $Xml.Load($Path)
-            $Xml.InnerXml
-        } else {
-            $Xml.LoadXml($Xaml)
-            $Xml.InnerXml
-        }
-
-        $WpfObject = [System.Windows.Markup.XamlReader]::Parse($RawXaml)
-
-        if ($DataContext) {
-            # because $DataContext can be created unbound, it may not have the same dispatcher as $WpfObject so it is set here.
-            $DataContext.psobject.Dispatcher = $WpfObject.Dispatcher
-            $WpfObject.DataContext = $DataContext
-        }
-
-        $WpfObject
-    }
-}
