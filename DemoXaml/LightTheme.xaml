@@ -1,16 +1,29 @@
-<ResourceDictionary
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!-- Light Theme Palette -->
-    <SolidColorBrush x:Key="TextPrimary" Color="#1C1C1E" />
-    <SolidColorBrush x:Key="DataGridLines" Color="#F0F0F0" />
-    <SolidColorBrush x:Key="DataGridRowHover" Color="#0D000000" />
-    <SolidColorBrush x:Key="DataGridRowSelected" Color="#08000000" />
-    <SolidColorBrush x:Key="FluentAccent" Color="#0078D4" />
-    <SolidColorBrush x:Key="ControlBackground" Color="#B3FFFFFF" />
-    <SolidColorBrush x:Key="ControlBackgroundHover" Color="#E6FFFFFF" />
-    <SolidColorBrush x:Key="ControlBorder" Color="#33000000" />
-    <SolidColorBrush x:Key="ControlPresed" Color="#E5E5E5" />
-    <SolidColorBrush x:Key="ControlBorderDisabled" Color="#40FFFFFF" />
-    <SolidColorBrush x:Key="ControlForegroundDisabled" Color="#8E8E93" />
+    <SolidColorBrush x:Key="TextPrimary"
+                     Color="#1C1C1E" />
+    <SolidColorBrush x:Key="DataGridLines"
+                     Color="#F0F0F0" />
+    <SolidColorBrush x:Key="DataGridRowHover"
+                     Color="#0D000000" />
+    <SolidColorBrush x:Key="DataGridRowSelected"
+                     Color="#08000000" />
+    <SolidColorBrush x:Key="FluentAccent"
+                     Color="#0078D4" />
+    <SolidColorBrush x:Key="ControlBackground"
+                     Color="#B3FFFFFF" />
+    <SolidColorBrush x:Key="ControlBackgroundHover"
+                     Color="#E6FFFFFF" />
+    <SolidColorBrush x:Key="ControlBorder"
+                     Color="#33000000" />
+    <SolidColorBrush x:Key="ControlPressed"
+                     Color="#E5E5E5" />
+    <SolidColorBrush x:Key="ControlBorderDisabled"
+                     Color="#40FFFFFF" />
+    <SolidColorBrush x:Key="ControlForegroundDisabled"
+                     Color="#8E8E93" />
+    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush"
+                     Color="#FF006FC4" />
+
 </ResourceDictionary>

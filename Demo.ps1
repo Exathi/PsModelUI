@@ -9,13 +9,13 @@ function Invoke-SampleFunction {
     Get-Random -Maximum $Max
 }
 
-$LongTask = New-ViewModelMethod -MethodName 'LongTask' -MethodBody {
+$LongTask = New-ViewModelMethod -Name 'LongTask' -Body {
     $Random = Get-Random -Min 100 -Max 5000
     Start-Sleep -Milliseconds $Random
     $this.LongTaskView = $Random
-}
+} -Throttle 0
 
-$AnotherTask = New-ViewModelMethod -MethodName 'AnotherTask' -MethodBody {
+$AnotherTask = New-ViewModelMethod -Name 'AnotherTask' -Body {
     $DataRow = [pscustomobject]@{
         Id = [runspace]::DefaultRunspace.Id
         Type = 'Start'
@@ -24,7 +24,7 @@ $AnotherTask = New-ViewModelMethod -MethodName 'AnotherTask' -MethodBody {
         Method = 'AnotherTask'
     }
 
-    $this.DataGridJobs.Add($DataRow)
+    $this.DataGridView.Add($DataRow)
 
     $DummyItems = 1..10
     $DummyItems | ForEach-Object {
@@ -36,7 +36,7 @@ $AnotherTask = New-ViewModelMethod -MethodName 'AnotherTask' -MethodBody {
             Method = 'AnotherTask'
         }
 
-        $this.DataGridJobs.Add($DataRow)
+        $this.DataGridView.Add($DataRow)
 
         $Random = Get-Random -Min 1 -Max 3000
         Start-Sleep -Milliseconds $Random
@@ -49,35 +49,41 @@ $AnotherTask = New-ViewModelMethod -MethodName 'AnotherTask' -MethodBody {
         Snapshot = $this.LongTaskView
         Method = 'AnotherTask'
     }
-    $this.DataGridJobs.Add($DataRow)
-}
+    $this.DataGridView.Add($DataRow)
+} -Throttle 2
 
-$SampleFunction = New-ViewModelMethod -MethodName 'SampleFunction' -MethodBody {
+$SampleFunction = New-ViewModelMethod -Name 'SampleFunction' -Body {
     $this.SampleFunctionView = Invoke-SampleFunction
 }
 
-$DotSourced = New-ViewModelMethod -MethodName 'DotSourced' -MethodBody {
+$DotSourced = New-ViewModelMethod -Name 'DotSourced' -Body {
     try {
         $this.DotSourcedView = . .\DemoDotSource.ps1
     } catch {
         Write-Warning "Method DotSourced failed. Current location is: '$PWD' and the dotsourced script isn't here. Try to source the fullpath, or '[Environment]::CurrentDirectory = Get-Location'."
     }
-} -Throttle 1
+}
 
-$ProgressBar = New-ViewModelMethod -MethodName 'ProgressBar' -MethodBody {
+$ProgressBar = New-ViewModelMethod -Name 'ProgressBar' -Body {
+    $this.ProgressVisible = 'Visible'
+
     $Start = 1
-    $End = 1000000
+    $End = 100
     $Start..$End | ForEach-Object {
+        while ($this.IsPaused) {
+            Start-Sleep -Milliseconds 100
+        }
+
         $Progress = ($_ / $End * 100)
         if ($Progress % 1 -eq 0) { $this.StatusPercent = $Progress }
-
-        while ($this.IsPaused) {
-            Start-Sleep -Milliseconds 50
-        }
+        Start-Sleep -Milliseconds 25
     }
-} -Throttle 1
 
-$ProgressPause = New-ViewModelMethod -MethodName 'ProgressPause' -MethodBody {
+    $this.ProgressVisible = 'Collapsed'
+}
+
+$ProgressPause = New-ViewModelMethod -Name 'ProgressPause' -Body {
+    if ($this.ProgressVisible -eq 'Collapsed') { return }
     $this.IsPaused = !$this.IsPaused
     $this.Status = if ($this.IsPaused) { 'Resume' } else { 'Pause' }
 } -IsAsync $false
@@ -88,8 +94,11 @@ Set-ViewModelPool -Functions @(
 
 $Splat = @{
     ClassName = 'MainViewModel'
-    PropertyNames = @(
-        'DataGridJobsLock'
+    PropertyInitialization = @(
+        New-ClassProperty -Name DataGridViewLock -Type ([object]) -Initialization { [object]::new() }
+        New-ClassProperty -Name DataGridView -Type ([System.Collections.ObjectModel.ObservableCollection[Object]]) -Initialization { [System.Collections.ObjectModel.ObservableCollection[Object]]::new() }
+        New-ClassProperty -Name Status -Type ([string]) -Initialization { 'Pause' }
+        New-ClassProperty -Name ProgressVisible -Type ([string]) -Initialization { 'Collapsed' }
     )
     Methods = @(
         $LongTask
@@ -108,12 +117,7 @@ $Splat = @{
 # $MainViewModelDefinition
 
 $MainViewModel = New-ViewModel @Splat
-
-# Populate ViewModel.
-$MainViewModel.Status = 'Pause'
-$MainViewModel.DataGridJobsLock = [object]::new()
-$MainViewModel.DataGridJobs = [System.Collections.ObjectModel.ObservableCollection[Object]]::new()
-[System.Windows.Data.BindingOperations]::EnableCollectionSynchronization($MainViewModel.DataGridJobs, $MainViewModel.DataGridJobsLock)
+[System.Windows.Data.BindingOperations]::EnableCollectionSynchronization($MainViewModel.DataGridView, $MainViewModel.DataGridViewLock)
 
 # Load window
 $View = if ($PSVersionTable.PSVersion.Major -eq 5) {
@@ -123,10 +127,23 @@ $View = if ($PSVersionTable.PSVersion.Major -eq 5) {
 }
 
 $Window = New-WpfObject -Path $View -DataContext $MainViewModel
-
-$ResourceDictionary = New-WpfObject -Path "$PSScriptRoot\DemoXaml\LightTheme.xaml"
-$Window.Resources.MergedDictionaries.Add($ResourceDictionary)
-$ResourceDictionary = New-WpfObject -Path "$PSScriptRoot\DemoXaml\Common.xaml"
-$Window.Resources.MergedDictionaries.Add($ResourceDictionary)
-
+if ($PSVersionTable.PSVersion.Major -eq 5) {
+    $ThemePath = "$PSScriptRoot\DemoXaml\LightTheme.xaml"
+    $CommonPath = "$PSScriptRoot\DemoXaml\Common.xaml"
+    $ResourceDictionary = New-WpfObject -Path $ThemePath
+    $Window.Resources.MergedDictionaries.Add($ResourceDictionary)
+    $ResourceDictionary = New-WpfObject -Path $CommonPath
+    $Window.Resources.MergedDictionaries.Add($ResourceDictionary)
+}
 $Window.ShowDialog()
+
+# Recreate object to be able to show again
+# Retains information since it was all stored in $MainViewModel
+# $Window = New-WpfObject -Path $View -DataContext $MainViewModel
+# if ($PSVersionTable.PSVersion.Major -eq 5) {
+#     $ResourceDictionary = New-WpfObject -Path $ThemePath
+#     $Window.Resources.MergedDictionaries.Add($ResourceDictionary)
+#     $ResourceDictionary = New-WpfObject -Path $CommonPath
+#     $Window.Resources.MergedDictionaries.Add($ResourceDictionary)
+# }
+# $Window.ShowDialog()
