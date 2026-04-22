@@ -12,7 +12,8 @@ An **Asynchronous** PowerShell UI! Supported by a **ViewModel** and **Command Bi
 Revisited and simplified for Pwsh. Previous version is in the archive for those that followed it and for some obscure findings.
 
 
-https://github.com/user-attachments/assets/caaab235-4286-406f-b3a9-e026df59c0e0
+<img width="1280" height="802" alt="Demo" src="https://github.com/user-attachments/assets/59c90980-47a0-400b-a943-08ee99dffede" />
+
 
 
 ## Check out the Demo
