@@ -122,7 +122,14 @@ function New-Class {
     $null = $StringBuilder.AppendLine(('{0}(){{' -f $ClassName))
 
     foreach ($ClassProperty in $PropertyInitialization) {
-        $null = $StringBuilder.AppendLine(('$this.{0} = [scriptblock]::Create(",({1})").InvokeReturnAsIs()' -f $ClassProperty.Name, $ClassProperty.Initialization.ToString()))
+        $RawText = @"
+`$this.$($ClassProperty.Name) = [scriptblock]::Create(
+@'
+,($($ClassProperty.Initialization.ToString()))
+'@
+).InvokeReturnAsIs()
+"@
+        $null = $StringBuilder.AppendLine($RawText)
     }
 
     $null = $StringBuilder.AppendLine(('}}' -f $ClassName))

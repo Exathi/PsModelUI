@@ -112,7 +112,14 @@ function New-ViewModel {
     $null = $StringBuilder.AppendLine(('{0}(){{' -f $ClassName))
 
     foreach ($ClassProperty in $PropertyInitialization) {
-        $null = $StringBuilder.AppendLine(('$this.{0} = [scriptblock]::Create(",({1})").InvokeReturnAsIs()' -f $ClassProperty.Name, $ClassProperty.Initialization.ToString()))
+        $RawText = @"
+`$this.$($ClassProperty.Name) = [scriptblock]::Create(
+@'
+,@($($ClassProperty.Initialization.ToString()))
+'@
+).InvokeReturnAsIs()
+"@
+        $null = $StringBuilder.AppendLine($RawText)
     }
 
     $null = $StringBuilder.AppendLine(('}}' -f $ClassName))
@@ -122,7 +129,11 @@ function New-ViewModel {
     foreach ($PSMethod in $Methods) {
         # Create a command property for the method and append 'Command' to the end.
         if ($CreateMethodCommand) {
-            $null = $StringBuilder.AppendLine(('${0}Command' -f $PSMethod.Name))
+            if ([string]::IsNullOrWhiteSpace($PSMethod.CommandName)) {
+                $null = $StringBuilder.AppendLine(('${0}Command' -f $PSMethod.Name))
+            } else {
+                $null = $StringBuilder.AppendLine(('${0}' -f $PSMethod.CommandName))
+            }
         }
 
         if (($PSMethod.Body.Ast.EndBlock.Statements.Where({ $null -ne $_.Pipeline })).Count -eq 0) {
@@ -176,7 +187,8 @@ function New-ViewModel {
     # add a command property for each method
     if ($CreateMethodCommand) {
         foreach ($PSMethod in $Methods) {
-            $DynamicClass."$($PSMethod.Name)Command" = New-ActionCommand -MethodName $PSMethod.Name -Target $DynamicClass -Throttle $PSMethod.Throttle -IsAsync $PSMethod.IsAsync
+            $CommandName = if ([string]::IsNullOrWhiteSpace($PSMethod.CommandName)) { "$($PSMethod.Name)Command" } else { $PSMethod.CommandName }
+            $DynamicClass."$CommandName" = New-ActionCommand -MethodName $PSMethod.Name -Target $DynamicClass -Throttle $PSMethod.Throttle -IsAsync $PSMethod.IsAsync
         }
     }
 
