@@ -27,6 +27,7 @@ function New-ViewModelMethod {
         [Parameter(Mandatory)]
         [scriptblock]$Body,
         [string[]]$MethodParameterNames,
+        [string]$CommandName,
         [int]$Throttle = 1,
         [bool]$IsAsync = $true
     )
@@ -41,6 +42,7 @@ function New-ViewModelMethod {
         Name = $Name
         Body = $Body.Ast.GetScriptBlock()
         MethodParameterNames = $JoinedParameters
+        CommandName = $CommandName
         Throttle = $Throttle
         IsAsync = $IsAsync
     }
