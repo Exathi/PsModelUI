@@ -122,6 +122,7 @@ function New-Class {
     $null = $StringBuilder.AppendLine(('{0}(){{' -f $ClassName))
 
     foreach ($ClassProperty in $PropertyInitialization) {
+        if ($null -eq $ClassProperty.Initialization -or $ClassProperty.Initialization.Ast.EndBlock.Statements.Count -eq 0) { continue }
         $RawText = @"
 `$this.$($ClassProperty.Name) = [scriptblock]::Create(
 @'

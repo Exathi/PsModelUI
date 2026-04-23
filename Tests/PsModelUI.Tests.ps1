@@ -14,6 +14,18 @@ Describe 'New-ViewModel' {
         $TestClass.psobject.Properties.Name | Should -BeExactly 'ClassProperty'
     }
 
+    Context 'Type Int' {
+        It 'Creates a new class with an initialized int property' {
+            $TestClass = New-ViewModel -ClassName 'Test' -PropertyInitialization ([pscustomobject]@{
+                    Name = 'ClassProperty'
+                    Type = ([int])
+                    Initialization = { 0 }
+                })
+            $TestClass.psobject.ClassProperty | Should -BeExactly 0
+            $TestClass.ClassProperty | Should -BeExactly 0
+        }
+    }
+
     Context 'Type String' {
         It 'Creates a new class with an initialized string property' {
             $TestClass = New-ViewModel -ClassName 'Test' -PropertyInitialization ([pscustomobject]@{
@@ -118,11 +130,21 @@ do'lor "
             $TestClass.psobject.Properties.Name | Should -Be 'ClassProperty'
         }
 
-        It 'Creates a new class with an an $null initialization property that exists' {
+        It 'Creates a new class with a scriptblock of $null initialization property that exists' {
             $TestClass = New-ViewModel -ClassName 'Test' -PropertyInitialization ([pscustomobject]@{
                     Name = 'ClassProperty'
                     Type = ([object])
                     Initialization = { $null }
+                })
+            $TestClass.psobject.ClassProperty | Should -Be $null
+            $TestClass.psobject.Properties.Name | Should -Be 'ClassProperty'
+        }
+
+        It 'Creates a new class with a $null initialization property that exists' {
+            $TestClass = New-ViewModel -ClassName 'Test' -PropertyInitialization ([pscustomobject]@{
+                    Name = 'ClassProperty'
+                    Type = ([object])
+                    Initialization = $null
                 })
             $TestClass.psobject.ClassProperty | Should -Be $null
             $TestClass.psobject.Properties.Name | Should -Be 'ClassProperty'

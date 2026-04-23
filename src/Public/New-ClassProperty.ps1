@@ -43,6 +43,6 @@ function New-ClassProperty {
     [pscustomobject]@{
         Name = $Name
         Type = if ($Type) { $Type } else { [object] }
-        Initialization = if ($Initialization) { $Initialization } else { [scriptblock]::create() }
+        Initialization = if ($Initialization.Ast.EndBlock.Statements.Count -gt 0) { $Initialization } else { $null }
     }
 }
