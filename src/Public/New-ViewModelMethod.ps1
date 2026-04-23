@@ -32,9 +32,9 @@ function New-ViewModelMethod {
         [bool]$IsAsync = $true
     )
 
-    $Parameters = foreach ($Name in $MethodParameterNames) {
-        if ($Name -notmatch '^\w+$') { throw ('parameter name can only contain letters and numbers: "{0}"' -f $Name) }
-        '${0}' -f $Name
+    $Parameters = foreach ($ParameterName in $MethodParameterNames) {
+        if ($ParameterName -notmatch '^\w+$') { throw ('parameter name can only contain letters and numbers: "{0}"' -f $ParameterName) }
+        '${0}' -f $ParameterName
     }
     $JoinedParameters = $Parameters -join ','
 
