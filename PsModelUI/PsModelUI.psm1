@@ -446,7 +446,15 @@ function New-Class {
     $null = $StringBuilder.AppendLine(('{0}(){{' -f $ClassName))
 
     foreach ($ClassProperty in $PropertyInitialization) {
-        $null = $StringBuilder.AppendLine(('$this.{0} = [scriptblock]::Create(",({1})").InvokeReturnAsIs()' -f $ClassProperty.Name, $ClassProperty.Initialization.ToString()))
+        if ($null -eq $ClassProperty.Initialization -or $ClassProperty.Initialization.Ast.EndBlock.Statements.Count -eq 0) { continue }
+        $RawText = @"
+`$this.$($ClassProperty.Name) = [scriptblock]::Create(
+@'
+,($($ClassProperty.Initialization.ToString()))
+'@
+).InvokeReturnAsIs()
+"@
+        $null = $StringBuilder.AppendLine($RawText)
     }
 
     $null = $StringBuilder.AppendLine(('}}' -f $ClassName))
@@ -553,7 +561,7 @@ function New-ClassProperty {
     [pscustomobject]@{
         Name = $Name
         Type = if ($Type) { $Type } else { [object] }
-        Initialization = if ($Initialization) { $Initialization } else { [scriptblock]::create() }
+        Initialization = if ($Initialization.Ast.EndBlock.Statements.Count -gt 0) { $Initialization } else { $null }
     }
 }
 
@@ -671,7 +679,15 @@ function New-ViewModel {
     $null = $StringBuilder.AppendLine(('{0}(){{' -f $ClassName))
 
     foreach ($ClassProperty in $PropertyInitialization) {
-        $null = $StringBuilder.AppendLine(('$this.{0} = [scriptblock]::Create(",({1})").InvokeReturnAsIs()' -f $ClassProperty.Name, $ClassProperty.Initialization.ToString()))
+        if ($null -eq $ClassProperty.Initialization -or $ClassProperty.Initialization.Ast.EndBlock.Statements.Count -eq 0) { continue }
+        $RawText = @"
+`$this.$($ClassProperty.Name) = [scriptblock]::Create(
+@'
+,($($ClassProperty.Initialization.ToString()))
+'@
+).InvokeReturnAsIs()
+"@
+        $null = $StringBuilder.AppendLine($RawText)
     }
 
     $null = $StringBuilder.AppendLine(('}}' -f $ClassName))
@@ -681,7 +697,11 @@ function New-ViewModel {
     foreach ($PSMethod in $Methods) {
         # Create a command property for the method and append 'Command' to the end.
         if ($CreateMethodCommand) {
-            $null = $StringBuilder.AppendLine(('${0}Command' -f $PSMethod.Name))
+            if ([string]::IsNullOrWhiteSpace($PSMethod.CommandName)) {
+                $null = $StringBuilder.AppendLine(('${0}Command' -f $PSMethod.Name))
+            } else {
+                $null = $StringBuilder.AppendLine(('${0}' -f $PSMethod.CommandName))
+            }
         }
 
         if (($PSMethod.Body.Ast.EndBlock.Statements.Where({ $null -ne $_.Pipeline })).Count -eq 0) {
@@ -735,7 +755,8 @@ function New-ViewModel {
     # add a command property for each method
     if ($CreateMethodCommand) {
         foreach ($PSMethod in $Methods) {
-            $DynamicClass."$($PSMethod.Name)Command" = New-ActionCommand -MethodName $PSMethod.Name -Target $DynamicClass -Throttle $PSMethod.Throttle -IsAsync $PSMethod.IsAsync
+            $CommandName = if ([string]::IsNullOrWhiteSpace($PSMethod.CommandName)) { "$($PSMethod.Name)Command" } else { $PSMethod.CommandName }
+            $DynamicClass."$CommandName" = New-ActionCommand -MethodName $PSMethod.Name -Target $DynamicClass -Throttle $PSMethod.Throttle -IsAsync $PSMethod.IsAsync
         }
     }
 
@@ -774,13 +795,14 @@ function New-ViewModelMethod {
         [Parameter(Mandatory)]
         [scriptblock]$Body,
         [string[]]$MethodParameterNames,
+        [string]$CommandName,
         [int]$Throttle = 1,
         [bool]$IsAsync = $true
     )
 
-    $Parameters = foreach ($Name in $MethodParameterNames) {
-        if ($Name -notmatch '^\w+$') { throw ('parameter name can only contain letters and numbers: "{0}"' -f $Name) }
-        '${0}' -f $Name
+    $Parameters = foreach ($ParameterName in $MethodParameterNames) {
+        if ($ParameterName -notmatch '^\w+$') { throw ('parameter name can only contain letters and numbers: "{0}"' -f $ParameterName) }
+        '${0}' -f $ParameterName
     }
     $JoinedParameters = $Parameters -join ','
 
@@ -788,6 +810,7 @@ function New-ViewModelMethod {
         Name = $Name
         Body = $Body.Ast.GetScriptBlock()
         MethodParameterNames = $JoinedParameters
+        CommandName = $CommandName
         Throttle = $Throttle
         IsAsync = $IsAsync
     }
