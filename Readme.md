@@ -27,20 +27,13 @@ Revisited and simplified for Pwsh. Previous version is in the archive for those 
 ``` Powershell
 Import-Module .\PsModelUI
 
-$MethodName = New-ViewModelMethod -Name 'MethodName' -Body {
-    $Random = Get-Random -Min 1 -Max 3000
-    Start-Sleep -Milliseconds $Random
-    $this.BoundViewProperty = $Random
-}
-
-$Splat = @{
-    ClassName = 'ViewModel'
-    Methods = @(
-        $MethodName
-    )
-}
-
-$ViewModel = New-ViewModel @Splat
+$ViewModel = New-ViewModel -ClassName 'ViewModel' -Methods @(
+		New-ViewModelMethod -Name 'MethodName' -Body {
+		$Random = Get-Random -Min 1 -Max 3000
+		Start-Sleep -Milliseconds $Random
+		$this.BoundViewProperty = $Random
+	} -Throttle 3
+)
 
 # Remove ThemeMode="Dark" for Windows Powershell.
 $Xaml = @'
@@ -66,33 +59,16 @@ Building a class has never been more verbose! Ever wanted to build your own clas
 Build parts of a class until you're ready to piece it together.
 
 ``` Powershell
-$MethodSplat = @{
-	Name = 'ClassMethod'
-	Body = {return 'Hello World'}
-}
-$ClassMethod = New-ViewModelMethod @MethodSplat
-
-$PropertySplat = @{
-	Name = 'ClassProperty'
-	Type = ([string])
-	Initialization = {'I have default a value'}
-}
-$ClassProperty = New-ClassProperty @PropertySplat
-
-$ClassSplat = @{
-	ClassName = 'DynamicClass'
-	PropertyInitialization = @(
-		$ClassProperty
-	)
-	Methods = @(
-		$ClassMethod
-	)
-	Unbound = $true
-    CreateMethodCommand = $true
-}
-$DynamicClass = New-ViewModel @ClassSplat
+$ClassMethod = New-ViewModelMethod -Name 'ClassMethod' -Body {return 'Hello World'}
+$ClassProperty = New-ClassProperty -Name 'ClassProperty' -Type ([string]) -Initialization {'I have default a value'}
+$DynamicClass = New-ViewModel -ClassName 'DynamicClass' -PropertyInitialization @(
+	$ClassProperty
+) -Methods @(
+	$ClassMethod
+)
 
 $DynamicClass
+
 ClassProperty          ClassMethodCommand
 -------------          ------------------
 I have default a value @{Workers=System.Management.Automation.PSScriptProperty}
@@ -101,18 +77,26 @@ $DynamicClass.psobject.ClassMethod()
 Hello World
 
 # Class definition as a string
-$ClassSplat.AsString = $true
-$DynamicClassDefinition = New-ViewModel @ClassSplat
+$DynamicClassDefinition = New-ViewModel -ClassName 'DynamicClass' -PropertyInitialization @(
+	$ClassProperty
+) -Methods @(
+	$ClassMethod
+) -AsString
 $DynamicClassDefinition
 
 class DynamicClass : ViewModelBase {
 [System.String]$ClassProperty
 DynamicClass(){
-$this.ClassProperty = [scriptblock]::Create(",('I have default a value')").InvokeReturnAsIs()
+$this.ClassProperty = [scriptblock]::Create(
+@'
+,('I have default a value')
+'@
+).InvokeReturnAsIs()
 }
 $ClassMethodCommand
 [object]ClassMethod() {
 return 'Hello World'
+}
 }
 
 ```
