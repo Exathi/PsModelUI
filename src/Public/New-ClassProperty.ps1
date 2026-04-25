@@ -14,21 +14,36 @@ function New-ClassProperty {
         'int'
         ([System.Collections.Generic.List[object]])
 
-        .PARAMETER Initialization
+        .PARAMETER Init
         A scriptblock containing the initial value or object to create.
         Similar to list initialization in C++. Same braces!
 
         { 123 }
         { [System.Collections.Generic.List[object]]::new() }
 
+        .PARAMETER ExcludePrefix
+        Excludes adding an underscore "_" to the backing class property.
+        The ScriptProperty will still be created and can be used for bindings, but it won't have a backing field with the same name.
+
+        .PARAMETER Get
+        A scriptblock that overwrites the default Get of the property. The scriptblock must return the value to be retrieved.
+
+        .PARAMETER Set
+        A scriptblock that overwrites the default the Set of the property. The scriptblock must have a parameter named 'value' to receive the value being set.
+        If used with New-ViewModel, you will need to include $this.psobject.RaisePropertyChanged("PropertyName/_PropertyName") in the scriptblock to update bindings.
+
         .EXAMPLE
-        New-ViewModelProperty -PropertyName 'a' -Type int -Initialization {1+1}
+        New-ViewModelProperty -PropertyName 'a' -Type int -Init {1+1}
         The above will be consumed in New-ViewModel to generate:
 
         class Sample {
-            [int]$a
+            [int]$_a
             Sample() {
-                $this.a = {1+1}.InvokeReturnAsIs()
+                $this.a = [scriptblock]::Create(
+@'
+                ,(1+1)
+'@
+                ).InvokeReturnAsIs()
             }
         }
     #>
@@ -37,12 +52,22 @@ function New-ClassProperty {
         [Parameter(Mandatory)]
         [string]$Name,
         [type]$Type,
-        [scriptblock]$Initialization
+        [scriptblock]$Init,
+        [Parameter(ParameterSetName = 'WithAccessors')]
+        [scriptblock]$Get,
+        [Parameter(ParameterSetName = 'WithAccessors')]
+        [scriptblock]$Set,
+        [switch]$ExcludePrefix
     )
+
+    if ($Name -notmatch '^\w+$') { throw 'Name can only contain letters and numbers' }
 
     [pscustomobject]@{
         Name = $Name
         Type = if ($Type) { $Type } else { [object] }
-        Initialization = if ($Initialization.Ast.EndBlock.Statements.Count -gt 0) { $Initialization } else { $null }
+        Init = if ($Init.Ast.EndBlock.Statements.Count -gt 0) { $Init } else { $null }
+        ExcludePrefix = $ExcludePrefix
+        Get = if ($Get.Ast.EndBlock.Statements.Count -gt 0) { $Get } else { $null }
+        Set = if ($Set.Ast.EndBlock.Statements.Count -gt 0) { $Set } else { $null }
     }
 }

@@ -9,14 +9,16 @@ function New-ViewModel {
 
         .EXAMPLE
         $A = New-ViewModel -ClassName 'ClassType' -PropertyDeclaration 'One'
-        $B = New-ViewModel -ClassName 'ClassType' -PropertyInitialization ([pscustomobject]@{
+        $B = New-ViewModel -ClassName 'ClassType' -PropertyInit ([pscustomobject]@{
             Name = 'NewProperty'
             Type = ([string])
-            Initialization = 'Hello World'
+            Init = 'Hello World'
         })
         $C = New-ViewModel -ClassName 'ClassType' -Methods ([pscustomobject]@{
             Name = 'ClassMethod'
 	        Body = {return 'Hello World'}
+            Throttle = 1
+            IsAsync = $false
         })
 
         .PARAMETER ClassName
@@ -35,32 +37,69 @@ function New-ViewModel {
         Creates:
 
         class ViewModel : ViewModelBase {
-            $property1
-            $PropertY2
+            $_property1
+            $_PropertY2
         }
 
-        .PARAMETER Methods
-        Will also create class properties for methods that call $this.propertyname that isn't in $PropertyDeclaration
-        Requires a hashtable of name and it's Body as a scriptblock
-        @(
-            DoMethod = {return 'hello world'}
-            OtherMethod = {$this.Property = 'foo'} # if '$Property' is not defined in PropertyDeclaration, it will be added automatically.
+        .PARAMETER PropertyInit
+        Use New-ClassProperty as a helper function to create the objects needed for this parameter.
+        Takes an array of PSCustomObjects with the following properties:
+
+        Name: Name of the property
+        Type: Type of the property (e.g. [string], [int], etc.)
+        Init: a scriptblock that defines the initial value of the property.
+            It can reference other properties defined in $PropertyInit or $PropertyDeclaration with `$this.PropertyName`.
+            It will be invoked in the constructor of the class so it can also reference other properties defined in the same $PropertyInit array.
+        ExcludePrefix: if $true, the backing property will be created without the '_' prefix.
+            This is useful for properties that need to be a the same backing name for binding purposes.
+        Get: A scriptblock that defines the get accessor of the property. It can reference other properties defined in $PropertyInit or $PropertyDeclaration with `$this.PropertyName`.
+        Set: A scriptblock that defines the set accessor of the property. It can reference other properties defined in $PropertyInit or $PropertyDeclaration with `$this.PropertyName`.
+
+        .EXAMPLE
+        New-ViewModel -ClassName 'Test' -PropertyInit @(
+            [pscustomobject]@{Name = 'Property1'; Type = ([string]); Init = {'Hello World'}}
+            [pscustomobject]@{Name = 'Property2'; Type = ([int]); Init = {42}; ExcludePrefix = $true}
         )
 
-        Creates:
+        .PARAMETER Methods
+        Use New-ViewModelMethod as a helper function to create the objects needed for this parameter.
+        Takes an array of PSCustomObjects with the following properties:
+
+        Name: name of the method
+        Body: a scriptblock that defines the body of the method. It can reference properties defined in $PropertyInit or $PropertyDeclaration with `$this.PropertyName`.
+            The paramblock defines the parameters that the method will receive.
+            Can be strongly typed by defining the parameters in the paramblock with their types.
+        CommandName: if CreateMethodCommand is $true, this will be the name of the command property created for this method. If not provided, the command property will be named '{MethodName}Command'.
+        Throttle: the max number of times the equivalent method command can be running at a given time. Default is 1.
+        IsAsync: this signals the equivalent command to be invoked in another runspace if $true or on the console thread. Default is $true.
+
+        Will also create class properties for methods that call $this.propertyname that isn't in $PropertyDeclaration or $PropertyInit if $AutomaticProperties is $true.
+
+        .EXAMPLE
+        $Test = New-ViewModel -ClassName 'Test' -Methods @(
+            [pscustomobject]@{
+                Name = 'DoMethod'
+                Body = {return 'hello world'}
+                Throttle = 1
+                IsAsync = $false
+            }
+        )
+
+        $Test.DoMethod()
+        hello world
+
+
+        Creates the following class:
 
         class ViewModel : ViewModelBase {
-            $Property
+            $_Property
             [object]DoMethod() {
                 return "hello world"
-            }
-            [void]OtherMethod() {
-                $this.Property = 'foo'
             }
         }
 
         .PARAMETER Unbound
-        Creates the class with no runspace affinity if $true. Otherwise class methods cannot be called when the UI is running.
+        Creates the class with no runspace affinity if $true. Otherwise class methods cannot be called when the UI is running if invoking async buttons.
 
         .PARAMETER CreateMethodCommand
         Creates a Command object for each method in $Methods that is populated with an [ActionCommand]
@@ -73,6 +112,9 @@ function New-ViewModel {
             }
         }
 
+        .PARAMETER AutomaticProperties
+        Automatically creates class properties for any $this.property reference in the method bodies that isn't already defined in $PropertyDeclaration or $PropertyInit. This is useful for quickly prototyping but it is recommended to define properties explicitly for maintainability.
+
         .PARAMETER AsString
         Returns the full class definition as a string instead of the object.
     #>
@@ -83,10 +125,11 @@ function New-ViewModel {
         [Parameter(ParameterSetName = 'AsObject')]
         [string[]]$PropertyDeclaration,
         [Parameter(ParameterSetName = 'AsTypeWithDefinition')]
-        [pscustomobject[]]$PropertyInitialization,
+        [pscustomobject[]]$PropertyInit,
         [pscustomobject[]]$Methods,
         [bool]$Unbound = $true,
         [bool]$CreateMethodCommand = $true,
+        [bool]$AutomaticProperties = $false,
         [switch]$AsString
     )
 
@@ -100,23 +143,34 @@ function New-ViewModel {
     # class properties
     foreach ($Name in $PropertyDeclaration) {
         if ($Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
-        $null = $StringBuilder.AppendLine(('${0}' -f $Name))
+        $null = $StringBuilder.AppendLine(('$_{0}' -f $Name))
     }
 
-    foreach ($ClassProperty in $PropertyInitialization) {
+    foreach ($ClassProperty in $PropertyInit) {
         if ($ClassProperty.Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
-        $null = $StringBuilder.AppendLine(('[{0}]${1}' -f $ClassProperty.Type, $ClassProperty.Name))
+        if ($ClassProperty.ExcludePrefix) {
+            $null = $StringBuilder.AppendLine(('[{0}]${1}' -f $ClassProperty.Type, $ClassProperty.Name))
+        } else {
+            $null = $StringBuilder.AppendLine(('[{0}]$_{1}' -f $ClassProperty.Type, $ClassProperty.Name))
+        }
     }
 
     # base constructor
     $null = $StringBuilder.AppendLine(('{0}(){{' -f $ClassName))
 
-    foreach ($ClassProperty in $PropertyInitialization) {
-        if ($null -eq $ClassProperty.Initialization -or $ClassProperty.Initialization.Ast.EndBlock.Statements.Count -eq 0) { continue }
+    foreach ($ClassProperty in $PropertyInit) {
+        if ($null -eq $ClassProperty.Init -or $ClassProperty.Init.Ast.EndBlock.Statements.Count -eq 0) { continue }
+
+        if ($ClassProperty.ExcludePrefix) {
+            $BackingFieldName = "psobject.$($ClassProperty.Name)"
+        } else {
+            $BackingFieldName = "psobject._$($ClassProperty.Name)"
+        }
+
         $RawText = @"
-`$this.$($ClassProperty.Name) = [scriptblock]::Create(
+`$this.$BackingFieldName = [scriptblock]::Create(
 @'
-,($($ClassProperty.Initialization.ToString()))
+,($($ClassProperty.Init.ToString()))
 '@
 ).InvokeReturnAsIs()
 "@
@@ -158,28 +212,30 @@ function New-ViewModel {
     # end class definition
     $null = $StringBuilder.AppendLine('}')
 
-    # find all $this references from preliminary definition
-    $DefinitionBeforeVariables = ([scriptblock]::Create($StringBuilder.ToString()))
-    $ClassProperties = $DefinitionBeforeVariables.Ast.FindAll({ $args[0] -is [System.Management.Automation.Language.VariableExpressionAst] }, $true) | Where-Object { $_.VariablePath.UserPath -eq 'this' }
-
-    # remove the newline and closing brace to add $this variables as properties from methods.
-    $null = $StringBuilder.Remove($StringBuilder.Length - 3, 3)
-
-    # get all unique $this properties and add them as $property if not added in $PropertyDeclaration
+    # find all $this references from preliminary definition and create class properties for them.
     $UniqueProperties = [System.Collections.Generic.HashSet[string]]::new()
-    foreach ($Property in $ClassProperties.Parent.Member.Extent.Text) {
-        if ([string]::IsNullOrWhiteSpace($Property)) { continue }
-        if ($PropertyDeclaration -contains $Property) { continue }
-        if ($PropertyInitialization.Name -contains $Property) { continue }
-        $null = $UniqueProperties.Add($Property)
-    }
+    if ($AutomaticProperties) {
+        $PreliminaryDefinition = ([scriptblock]::Create($StringBuilder.ToString()))
+        $ClassProperties = $PreliminaryDefinition.Ast.FindAll({ $args[0] -is [System.Management.Automation.Language.VariableExpressionAst] }, $true) | Where-Object { $_.VariablePath.UserPath -eq 'this' }
 
-    foreach ($Property in $UniqueProperties.GetEnumerator()) {
-        $null = $StringBuilder.AppendLine('${0}' -f $Property)
-    }
+        # remove the newline and closing brace to add $this variables as properties from methods.
+        $null = $StringBuilder.Remove($StringBuilder.Length - 3, 3)
 
-    # finish class definition
-    $null = $StringBuilder.AppendLine('}')
+        # get all unique $this properties and add them as $property if not added in $PropertyDeclaration
+        foreach ($ClassProperty in $ClassProperties.Parent.Member.Extent.Text) {
+            if ([string]::IsNullOrWhiteSpace($ClassProperty)) { continue }
+            if ($PropertyDeclaration -contains $ClassProperty) { continue }
+            if ($PropertyInit.Name -contains $ClassProperty) { continue }
+            $null = $UniqueProperties.Add($ClassProperty)
+        }
+
+        foreach ($ClassProperty in $UniqueProperties.GetEnumerator()) {
+            $null = $StringBuilder.AppendLine('$_{0}' -f $ClassProperty)
+        }
+
+        # end class definition
+        $null = $StringBuilder.AppendLine('}')
+    }
 
     if ($AsString) {
         return $StringBuilder.ToString()
@@ -204,6 +260,14 @@ function New-ViewModel {
 
     if (!$script:ViewModelThread['Pool'] -or $script:ViewModelThread['Pool'].IsDisposed) { Set-ViewModelPool }
     $DynamicClass.psobject.ViewModelThread = $script:ViewModelThread
+
+    # ViewModelBase automatically adds script properties so this differs from New-Class
+
+    foreach ($ClassProperty in $PropertyInit) {
+        if ($ClassProperty.Get -and $ClassProperty.Set) {
+            $DynamicClass | Add-Member -MemberType ScriptProperty -Name $ClassProperty.Name -Value $ClassProperty.Get.Ast.GetScriptBlock() -SecondValue $ClassProperty.Set.Ast.GetScriptBlock() -Force
+        }
+    }
 
     $DynamicClass
 }

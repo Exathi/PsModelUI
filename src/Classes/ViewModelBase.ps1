@@ -46,13 +46,14 @@ class ViewModelBase : PSCustomObject, System.ComponentModel.INotifyPropertyChang
             }
         ).ForEach(
             {
+                $ProperName = if ($_.Name.StartsWith('_')) { $_.Name.Remove(0, 1) } else { $_.Name }
                 $Splat = @{
-                    Name = $_.Name
+                    Name = $ProperName
                     MemberType = 'ScriptProperty'
                     Value = [scriptblock]::Create('return ,$this.psobject.{0}' -f $_.Name)
-                    SecondValue = [scriptblock]::Create('param($value)
+                    SecondValue = [scriptblock]::Create(('param($value)
                         $this.psobject.{0} = $value
-                        $this.psobject.RaisePropertyChanged("{0}")' -f $_.Name
+                        $this.psobject.RaisePropertyChanged("{1}")' -f $_.Name, $ProperName)
                     )
                 }
                 $this | Add-Member @Splat

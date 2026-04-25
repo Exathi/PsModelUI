@@ -8,13 +8,13 @@ function New-Class {
         Allows for classes of the same type name with different properties and methods but allows for hot reloading of classes.
 
         .EXAMPLE
-        $A = New-ViewModel -ClassName 'ClassType' -PropertyDeclaration 'One'
-        $B = New-ViewModel -ClassName 'ClassType' -PropertyInitialization ([pscustomobject]@{
+        $A = New-Class -ClassName 'ClassType' -PropertyDeclaration 'One'
+        $B = New-Class -ClassName 'ClassType' -PropertyInit ([pscustomobject]@{
             Name = 'NewProperty'
             Type = ([string])
-            Initialization = 'Hello World'
+            Init = 'Hello World'
         })
-        $C = New-ViewModel -ClassName 'ClassType' -Methods ([pscustomobject]@{
+        $C = New-Class -ClassName 'ClassType' -Methods ([pscustomobject]@{
             Name = 'ClassMethod'
 	        Body = {return 'Hello World'}
         })
@@ -87,13 +87,14 @@ function New-Class {
     param (
         [Parameter(Mandatory)]
         [string]$ClassName,
-        [string[]]$Inherits,
+        [string[]]$Inherits = 'pscustomobject',
         [Parameter(ParameterSetName = 'AsObject')]
         [string[]]$PropertyDeclaration,
         [Parameter(ParameterSetName = 'AsTypeWithDefinition')]
-        [pscustomobject[]]$PropertyInitialization,
+        [pscustomobject[]]$PropertyInit,
         [pscustomobject[]]$Methods,
         [bool]$Unbound = $true,
+        [bool]$AutomaticProperties = $false,
         [switch]$AsString
     )
 
@@ -110,23 +111,34 @@ function New-Class {
     # class properties
     foreach ($Name in $PropertyDeclaration) {
         if ($Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
-        $null = $StringBuilder.AppendLine(('${0}' -f $Name))
+        $null = $StringBuilder.AppendLine(('$_{0}' -f $Name))
     }
 
-    foreach ($ClassProperty in $PropertyInitialization) {
+    foreach ($ClassProperty in $PropertyInit) {
         if ($ClassProperty.Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
-        $null = $StringBuilder.AppendLine(('[{0}]${1}' -f $ClassProperty.Type, $ClassProperty.Name))
+        if ($ClassProperty.ExcludePrefix) {
+            $null = $StringBuilder.AppendLine(('[{0}]${1}' -f $ClassProperty.Type, $ClassProperty.Name))
+        } else {
+            $null = $StringBuilder.AppendLine(('[{0}]$_{1}' -f $ClassProperty.Type, $ClassProperty.Name))
+        }
     }
 
     # base constructor
     $null = $StringBuilder.AppendLine(('{0}(){{' -f $ClassName))
 
-    foreach ($ClassProperty in $PropertyInitialization) {
-        if ($null -eq $ClassProperty.Initialization -or $ClassProperty.Initialization.Ast.EndBlock.Statements.Count -eq 0) { continue }
+    foreach ($ClassProperty in $PropertyInit) {
+        if ($null -eq $ClassProperty.Init -or $ClassProperty.Init.Ast.EndBlock.Statements.Count -eq 0) { continue }
+
+        if ($ClassProperty.ExcludePrefix) {
+            $BackingFieldName = "psobject.$($ClassProperty.Name)"
+        } else {
+            $BackingFieldName = "psobject._$($ClassProperty.Name)"
+        }
+
         $RawText = @"
-`$this.$($ClassProperty.Name) = [scriptblock]::Create(
+`$this.$BackingFieldName = [scriptblock]::Create(
 @'
-,($($ClassProperty.Initialization.ToString()))
+,($($ClassProperty.Init.ToString()))
 '@
 ).InvokeReturnAsIs()
 "@
@@ -159,28 +171,30 @@ function New-Class {
     # end class definition
     $null = $StringBuilder.AppendLine('}')
 
-    # find all $this references from preliminary definition
-    $DefinitionBeforeVariables = ([scriptblock]::Create($StringBuilder.ToString()))
-    $ClassProperties = $DefinitionBeforeVariables.Ast.FindAll({ $args[0] -is [System.Management.Automation.Language.VariableExpressionAst] }, $true) | Where-Object { $_.VariablePath.UserPath -eq 'this' }
-
-    # remove the newline and closing brace to add $this variables as properties from methods.
-    $null = $StringBuilder.Remove($StringBuilder.Length - 3, 3)
-
-    # get all unique $this properties and add them as $property if not added in $PropertyDeclaration
+    # find all $this references from preliminary definition and create class properties for them.
     $UniqueProperties = [System.Collections.Generic.HashSet[string]]::new()
-    foreach ($Property in $ClassProperties.Parent.Member.Extent.Text) {
-        if ([string]::IsNullOrWhiteSpace($Property)) { continue }
-        if ($PropertyDeclaration -contains $Property) { continue }
-        if ($PropertyInitialization.Name -contains $Property) { continue }
-        $null = $UniqueProperties.Add($Property)
-    }
+    if ($AutomaticProperties) {
+        $PreliminaryDefinition = ([scriptblock]::Create($StringBuilder.ToString()))
+        $ClassProperties = $PreliminaryDefinition.Ast.FindAll({ $args[0] -is [System.Management.Automation.Language.VariableExpressionAst] }, $true) | Where-Object { $_.VariablePath.UserPath -eq 'this' }
 
-    foreach ($Property in $UniqueProperties.GetEnumerator()) {
-        $null = $StringBuilder.AppendLine('${0}' -f $Property)
-    }
+        # remove the newline and closing brace to add $this variables as properties from methods.
+        $null = $StringBuilder.Remove($StringBuilder.Length - 3, 3)
 
-    # finish class definition
-    $null = $StringBuilder.AppendLine('}')
+        # get all unique $this properties and add them as $property if not added in $PropertyDeclaration
+        foreach ($ClassProperty in $ClassProperties.Parent.Member.Extent.Text) {
+            if ([string]::IsNullOrWhiteSpace($ClassProperty)) { continue }
+            if ($PropertyDeclaration -contains $ClassProperty) { continue }
+            if ($PropertyInit.Name -contains $ClassProperty) { continue }
+            $null = $UniqueProperties.Add($ClassProperty)
+        }
+
+        foreach ($ClassProperty in $UniqueProperties.GetEnumerator()) {
+            $null = $StringBuilder.AppendLine('$_{0}' -f $ClassProperty)
+        }
+
+        # end class definition
+        $null = $StringBuilder.AppendLine('}')
+    }
 
     if ($AsString) {
         return $StringBuilder.ToString()
