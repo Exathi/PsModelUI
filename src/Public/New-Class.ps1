@@ -195,8 +195,53 @@ function New-Class {
         [activator]::CreateInstance($ClassName)
     }
 
-    if (!$script:ViewModelThread['Pool'] -or $script:ViewModelThread['Pool'].IsDisposed) { Set-ViewModelPool }
-    $DynamicClass.psobject.ViewModelThread = $script:ViewModelThread
+    foreach ($ClassProperty in $PropertyDeclaration) {
+        $ProperName = if ($ClassProperty.StartsWith('_')) { $ClassProperty.Remove(0, 1) } else { $ClassProperty }
+        $Splat = @{
+            Name = $ProperName
+            MemberType = 'ScriptProperty'
+            Value = [scriptblock]::Create('return ,$this.psobject.{0}' -f $ClassProperty)
+            SecondValue = [scriptblock]::Create(('param($value)
+                $this.psobject.{0} = $value
+                $this.psobject.RaisePropertyChanged("{1}")' -f $ClassProperty, $ProperName)
+            )
+        }
+        $DynamicClass | Add-Member @Splat
+    }
+
+    foreach ($ClassProperty in $PropertyInit) {
+        if ($ClassProperty.Get -and $ClassProperty.Set) {
+            $DynamicClass | Add-Member -MemberType ScriptProperty -Name $ClassProperty.Name -Value $ClassProperty.Get.Ast.GetScriptBlock() -SecondValue $ClassProperty.Set.Ast.GetScriptBlock() -Force
+        } else {
+            if ($ClassProperty.ExcludePrefix) {
+                $BackingFieldName = $ClassProperty.Name
+            } else {
+                $BackingFieldName = "_$($ClassProperty.Name)"
+            }
+            $Splat = @{
+                Name = $ClassProperty.Name
+                MemberType = 'ScriptProperty'
+                Value = [scriptblock]::Create('return ,$this.psobject.{0}' -f $BackingFieldName)
+                SecondValue = [scriptblock]::Create(('param($value)
+                        $this.psobject.{0} = $value' -f $BackingFieldName)
+                )
+            }
+            $DynamicClass | Add-Member @Splat
+        }
+    }
+
+    foreach ($ClassProperty in $UniqueProperties.GetEnumerator()) {
+        $ProperName = "_$ClassProperty"
+        $Splat = @{
+            Name = $ClassProperty
+            MemberType = 'ScriptProperty'
+            Value = [scriptblock]::Create('return ,$this.psobject.{0}' -f $ProperName)
+            SecondValue = [scriptblock]::Create(('param($value)
+                        $this.psobject.{0} = $value' -f $ProperName)
+            )
+        }
+        $DynamicClass | Add-Member @Splat
+    }
 
     $DynamicClass
 }
