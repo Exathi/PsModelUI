@@ -25,5 +25,7 @@
                      Color="#8E8E93" />
     <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush"
                      Color="#FF006FC4" />
+    <SolidColorBrush x:Key="ThemeBackground"
+                     Color="#C8F8F8FA" />
 
 </ResourceDictionary>

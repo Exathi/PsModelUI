@@ -1,222 +1,262 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        Title="PsModelUI 5.1"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PsModelUI 5.1"
         WindowStartupLocation="CenterScreen"
         Width="1280"
         Height="800">
+    <Window.Resources>
+        <DataTemplate x:Key="GenericDemoCard">
+            <Border Margin="0,0,0,16"
+                    Padding="10"
+                    Background="White"
+                    CornerRadius="8"
+                    UseLayoutRounding="True">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="10"
+                                      Color="LightGray"
+                                      Opacity="0.5"
+                                      RenderingBias="Quality" />
+                </Border.Effect>
+                <StackPanel TextOptions.TextFormattingMode="Display">
+                    <TextBlock Text="{Binding Header, Mode=OneTime}"
+                               FontSize="14"
+                               FontWeight="Bold" />
+                    <TextBlock Text="{Binding BodyText, Mode=OneTime}"
+                               TextWrapping="Wrap"
+                               FontSize="12"
+                               Margin="0,10"
+                               Foreground="DimGray" />
+                    <TextBlock Text="{Binding UpdatableContent}"
+                               FontSize="18"
+                               Margin="0,10" />
+                    <Button Content="{Binding ButtonText, Mode=OneTime}"
+                            Command="{Binding Command}"
+                            HorizontalAlignment="Left"
+                            Padding="15,5"
+                            Margin="0,10,0,5" />
+                    <TextBlock Text="{Binding FooterNote, Mode=OneTime}"
+                               FontSize="10"
+                               Foreground="DimGray" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
 
-    <Grid UseLayoutRounding="True"
-          Background="#F1F1F1">
-        <TabControl>
+        <DataTemplate x:Key="ProgressBarDemoCard">
+            <Border Margin="0,0,0,16"
+                    Padding="10"
+                    Background="White"
+                    CornerRadius="8"
+                    UseLayoutRounding="True">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="10"
+                                      Color="LightGray"
+                                      Opacity="0.5"
+                                      RenderingBias="Quality" />
+                </Border.Effect>
+                <StackPanel TextOptions.TextFormattingMode="Display">
+                    <TextBlock Text="{Binding Header, Mode=OneTime}"
+                               FontSize="14"
+                               FontWeight="Bold" />
+                    <TextBlock Text="{Binding BodyText, Mode=OneTime}"
+                               TextWrapping="Wrap"
+                               FontSize="12"
+                               Margin="0,10"
+                               Foreground="DimGray" />
+                    <TextBlock Text="{Binding UpdatableContent}"
+                               FontSize="18" />
+                    <ProgressBar Value="{Binding StatusPercent}"
+                                 Visibility="{Binding ProgressVisible}"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 Height="5"
+                                 Margin="50,-20,50,0"
+                                 DockPanel.Dock="Top" />
+                    <Button Content="{Binding ButtonText, Mode=OneTime}"
+                            Command="{Binding Command}"
+                            HorizontalAlignment="Left"
+                            Padding="15,5"
+                            Margin="0,10,0,5" />
+                    <Button Content="{Binding Status}"
+                            Command="{Binding ProgressPauseCommand}"
+                            Padding="10,5"
+                            Margin="0,10,0,5"
+                            HorizontalAlignment="Left"
+                            DockPanel.Dock="Top" />
+                    <TextBlock Text="{Binding FooterNote, Mode=OneTime}"
+                               FontSize="10"
+                               Foreground="DimGray" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="DataGridDemoCard">
+            <Border Grid.Row="0"
+                    Grid.RowSpan="3"
+                    Grid.Column="2"
+                    Margin="0,0,0,16"
+                    Padding="10"
+                    Background="White"
+                    CornerRadius="8">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="10"
+                                      Color="LightGray"
+                                      Opacity="0.5" />
+                </Border.Effect>
+
+                <DockPanel Margin="20,20,20,0"
+                           Grid.Column="1">
+                    <TextBlock Text="{Binding Header, Mode=OneTime}"
+                               FontSize="14"
+                               FontWeight="Bold"
+                               DockPanel.Dock="Top" />
+                    <TextBlock Text="{Binding BodyText, Mode=OneTime}"
+                               TextWrapping="Wrap"
+                               FontSize="12"
+                               Margin="0,10"
+                               Foreground="DimGray"
+                               DockPanel.Dock="Top" />
+                    <Button Content="{Binding ButtonText, Mode=OneTime}"
+                            Command="{Binding Command}"
+                            Padding="10,5"
+                            Margin="0,0,0,10"
+                            HorizontalAlignment="Left"
+                            DockPanel.Dock="Top" />
+                    <TextBlock Text="{Binding FooterNote, Mode=OneTime}"
+                               FontSize="10"
+                               Foreground="DimGray"
+                               DockPanel.Dock="Top" />
+                    <DataGrid ItemsSource="{Binding GridContent}"
+                              ColumnWidth="*"
+                              IsReadOnly="True"
+                              AutoGenerateColumns="True"
+                              DockPanel.Dock="Top"
+                              Margin="0,10,0,0">
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ColorCard">
+            <Border Margin="0,0,0,16"
+                    Padding="10"
+                    Background="{Binding ColorArgb}"
+                    CornerRadius="8"
+                    UseLayoutRounding="True">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="10"
+                                      Color="LightGray"
+                                      Opacity="0.5"
+                                      RenderingBias="Quality" />
+                </Border.Effect>
+                <StackPanel TextOptions.TextFormattingMode="Display">
+                    <TextBlock Text="{Binding Header, Mode=OneTime}"
+                               FontSize="14"
+                               FontWeight="Bold" />
+                    <Slider Minimum="0"
+                            Maximum="255"
+                            Value="{Binding ColorA}"
+                            IsSnapToTickEnabled="True"
+                            TickFrequency="1"
+                            VerticalAlignment="Center" />
+                    <Slider Minimum="0"
+                            Maximum="255"
+                            Value="{Binding ColorR}"
+                            IsSnapToTickEnabled="True"
+                            TickFrequency="1"
+                            VerticalAlignment="Center" />
+                    <Slider Minimum="0"
+                            Maximum="255"
+                            Value="{Binding ColorG}"
+                            IsSnapToTickEnabled="True"
+                            TickFrequency="1"
+                            VerticalAlignment="Center" />
+                    <TextBox Text="{Binding ColorB, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Label Content="{Binding ColorB, Mode=TwoWay}" />
+                    <Button Content="{Binding ButtonText, Mode=OneTime}"
+                            Command="{Binding Command}"
+                            Padding="10,5"
+                            Margin="0,0,0,10"
+                            HorizontalAlignment="Left"
+                            DockPanel.Dock="Top" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Border Margin="0,0,0,16"
+            Padding="10"
+            Background="{DynamicResource ThemeBackground}"
+            CornerRadius="8"
+            UseLayoutRounding="True">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="10"
+                              Color="LightGray"
+                              Opacity="0.5"
+                              RenderingBias="Quality" />
+        </Border.Effect>
+        <TabControl UseLayoutRounding="True"
+                    BorderThickness="0,1,0,0"
+                    BorderBrush="{DynamicResource ControlBorder}">
             <TabItem>
                 <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Demo"
-                                   Margin="5"
-                                   FontSize="16"
-                                   FontWeight="SemiBold" />
-                    </StackPanel>
+                    <TextBlock Text="{Binding Tab1}"
+                               Padding="5"
+                               FontSize="16"
+                               FontWeight="SemiBold" />
                 </TabItem.Header>
-
-                <Grid Margin="20"
-                      Grid.Column="0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width=".5*" />
-                        <ColumnDefinition Width="10" />
-                        <ColumnDefinition Width=".5*" />
-                    </Grid.ColumnDefinitions>
-
-                    <!-- Card 1 -->
-                    <Border Grid.Row="0"
-                            Margin="0,0,0,16"
-                            Padding="10"
-                            Background="White"
-                            CornerRadius="8">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="10"
-                                              Color="LightGray"
-                                              Opacity="0.5" />
-                        </Border.Effect>
-                        <StackPanel>
-                            <TextBlock Text="LongTaskView"
-                                       FontSize="14"
-                                       FontWeight="Bold" />
-                            <TextBlock Text="$LongTaskCommand will be invoked in a runspace to update $LongTaskView after 100ms - 5000ms per click. if there are no available runspaces in the runspacepool, the command is queued until the next runspace is available."
-                                       TextWrapping="Wrap"
-                                       FontSize="12"
-                                       Margin="0,10"
-                                       Foreground="DimGray" />
-                            <TextBlock Text="{Binding LongTaskView}"
-                                       FontSize="18"
-                                       Margin="0,10" />
-                            <Button Name="LongTask"
-                                    Content="LongTask"
-                                    Command="{Binding LongTaskCommand}"
-                                    HorizontalAlignment="Left"
-                                    Padding="15,5"
-                                    Margin="0,10,0,5" />
-                            <TextBlock Text="Click to your heart's content."
-                                       FontSize="10"
-                                       Foreground="DimGray" />
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Card 2 -->
-                    <Border Grid.Row="1"
-                            Margin="0,0,0,16"
-                            Padding="10"
-                            Background="White"
-                            CornerRadius="8">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="10"
-                                              Color="LightGray"
-                                              Opacity="0.5" />
-                        </Border.Effect>
-                        <StackPanel>
-                            <TextBlock Text="SampleFunctionView"
-                                       FontSize="14"
-                                       FontWeight="Bold" />
-                            <TextBlock Text="The below textblock will update when the button is clicked. The button calls $SampleFunctionCommand in a runspace to update $SampleFunctionView after 2000ms and cannot be clicked while running."
-                                       TextWrapping="Wrap"
-                                       FontSize="12"
-                                       Margin="0,10"
-                                       Foreground="DimGray" />
-                            <TextBlock Text="{Binding SampleFunctionView}"
-                                       FontSize="18"
-                                       Margin="0,10" />
-                            <Button Name="Function"
-                                    Content="Function"
-                                    Command="{Binding SampleFunctionCommand}"
-                                    HorizontalAlignment="Left"
-                                    Padding="15,5"
-                                    Margin="0,10,0,5" />
-                            <TextBlock Text="Button will be disabled until command is finished."
-                                       FontSize="10"
-                                       Foreground="DimGray" />
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Card 3 -->
-                    <Border Grid.Row="2"
-                            Margin="0,0,0,16"
-                            Padding="10"
-                            Background="White"
-                            CornerRadius="8">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="10"
-                                              Color="LightGray"
-                                              Opacity="0.5" />
-                        </Border.Effect>
-                        <StackPanel>
-                            <TextBlock Text="DotSourcedView"
-                                       FontSize="14"
-                                       FontWeight="Bold" />
-                            <TextBlock Text="This will invoke $DotSourcedCommand in a runspace to update $DotSourcedView."
-                                       TextWrapping="Wrap"
-                                       FontSize="12"
-                                       Margin="0,10"
-                                       Foreground="DimGray" />
-                            <TextBlock Text="{Binding DotSourcedView}"
-                                       FontSize="18"
-                                       Margin="0,10" />
-                            <Button Name="DotSourced"
-                                    Content="DotSourced"
-                                    Command="{Binding DotSourcedCommand}"
-                                    HorizontalAlignment="Left"
-                                    Padding="15,5"
-                                    Margin="0,10,0,5" />
-                            <TextBlock Text="Already have scripts? Just invoke them."
-                                       FontSize="10"
-                                       Foreground="DimGray" />
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Card 4 -->
-                    <Border Grid.Row="0"
-                            Grid.RowSpan="3"
-                            Grid.Column="2"
-                            Margin="0,0,0,16"
-                            Padding="10"
-                            Background="White"
-                            CornerRadius="8">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="10"
-                                              Color="LightGray"
-                                              Opacity="0.5" />
-                        </Border.Effect>
-
-                        <DockPanel Margin="20"
-                                   Grid.Column="1">
-                            <TextBlock Text="DataGridView"
-                                       FontSize="14"
-                                       FontWeight="Bold"
-                                       DockPanel.Dock="Top" />
-                            <TextBlock Text="Add to datagrid with a maximum of two running at the same time."
-                                       TextWrapping="Wrap"
-                                       FontSize="12"
-                                       Margin="0,10"
-                                       Foreground="DimGray"
-                                       DockPanel.Dock="Top" />
-                            <Button Name="AnotherTaskCommand"
-                                    Content="AnotherTaskCommand"
-                                    Command="{Binding AnotherTaskCommand}"
-                                    Padding="10,5"
-                                    Margin="0,0,0,10"
-                                    HorizontalAlignment="Left"
-                                    DockPanel.Dock="Top" />
-                            <TextBlock Text="Logs to datagrid."
-                                       FontSize="10"
-                                       Foreground="DimGray"
-                                       DockPanel.Dock="Top" />
-                            <DataGrid Name="DataGridView"
-                                      ItemsSource="{Binding DataGridView}"
-                                      ColumnWidth="*"
-                                      IsReadOnly="True"
-                                      AutoGenerateColumns="False"
-                                      DockPanel.Dock="Top"
-                                      Margin="0,10,0,0">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Id"
-                                                        Width="Auto"
-                                                        Binding="{Binding Path=Id}" />
-                                    <DataGridTextColumn Header="Type"
-                                                        Width="Auto"
-                                                        MinWidth="100"
-                                                        Binding="{Binding Path=Type}" />
-                                    <DataGridTextColumn Header="Time"
-                                                        Width="*"
-                                                        Binding="{Binding Path=Time}" />
-                                    <DataGridTextColumn Header="Snapshot"
-                                                        Width="*"
-                                                        Binding="{Binding Path=Snapshot}" />
-                                    <DataGridTextColumn Header="Method"
-                                                        Width="*"
-                                                        Binding="{Binding Path=Method}" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </DockPanel>
-                    </Border>
-                </Grid>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="20,20,20,0"
+                          Grid.Column="0"
+                          UseLayoutRounding="True">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="45" />
+                            <RowDefinition Height="225" />
+                            <RowDefinition Height="225" />
+                            <RowDefinition Height="225" />
+                            <RowDefinition Height="225" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width=".5*" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width=".5*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Tab1Title}"
+                                   FontSize="20"
+                                   FontWeight="Bold" />
+                        <ContentControl Grid.Row="1"
+                                        Content="{Binding LongTaskViewModel}"
+                                        ContentTemplate="{DynamicResource GenericDemoCard}" />
+                        <ContentControl Grid.Row="2"
+                                        Content="{Binding SampleFunctionViewModel}"
+                                        ContentTemplate="{DynamicResource GenericDemoCard}" />
+                        <ContentControl Grid.Row="3"
+                                        Content="{Binding DotSourcedViewModel}"
+                                        ContentTemplate="{DynamicResource GenericDemoCard}" />
+                        <ContentControl Grid.Row="1"
+                                        Grid.RowSpan="3"
+                                        Grid.Column="2"
+                                        Content="{Binding AnotherTaskViewModel}"
+                                        ContentTemplate="{DynamicResource DataGridDemoCard}" />
+                        <ContentControl Grid.Row="4"
+                                        Content="{Binding ProgressBarViewModel}"
+                                        ContentTemplate="{DynamicResource ProgressBarDemoCard}" />
+                    </Grid>
+                </ScrollViewer>
             </TabItem>
+
             <TabItem>
                 <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="ProgressBar"
-                                   Margin="5"
-                                   FontSize="16"
-                                   FontWeight="SemiBold" />
-                    </StackPanel>
+                    <TextBlock Text="{Binding Tab2}"
+                               Padding="5"
+                               FontSize="16"
+                               FontWeight="SemiBold" />
                 </TabItem.Header>
-
-
                 <Grid Margin="20"
-                      Grid.Column="0">
+                      Grid.Column="0"
+                      UseLayoutRounding="True">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="45" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="*" />
@@ -226,52 +266,80 @@
                         <ColumnDefinition Width="10" />
                         <ColumnDefinition Width=".5*" />
                     </Grid.ColumnDefinitions>
-
-                    <!-- Card 1 -->
-                    <Border Grid.Row="0"
-                            Margin="0,0,0,16"
+                    <TextBlock Grid.Row="0"
+                               Text="{Binding Tab2Title}"
+                               FontSize="20"
+                               FontWeight="Bold" />
+                    <Border Grid.Row="1"
+                            Grid.RowSpan="3"
+                            Grid.Column="0"
                             Padding="10"
-                            Background="White"
-                            CornerRadius="8">
+                            Background="{Binding ColorViewModel.ColorArgb}"
+                            CornerRadius="8"
+                            UseLayoutRounding="True">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="10"
                                               Color="LightGray"
-                                              Opacity="0.5" />
+                                              Opacity="0.5"
+                                              RenderingBias="Quality" />
                         </Border.Effect>
-                        <StackPanel>
-                            <TextBlock Text="ProgressPercent"
+                        <StackPanel TextOptions.TextFormattingMode="Display">
+                            <TextBlock Text="{Binding ColorViewModel.Header}"
                                        FontSize="14"
                                        FontWeight="Bold" />
-                            <TextBlock Text="{Binding Path=Status}"
-                                       TextWrapping="Wrap"
+                            <TextBlock Text="{Binding ColorViewModel.Limitations}"
+                                       FontSize="14"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding ColorViewModel.HeaderAlpha}"
+                                       Margin="0,20,0,0" />
+                            <Slider Minimum="0"
+                                    Maximum="255"
+                                    Value="{Binding ElementName=ColorA, Path=Text}"
+                                    IsSnapToTickEnabled="True"
+                                    TickFrequency="1"
+                                    VerticalAlignment="Center" />
+                            <TextBox Name="ColorA"
+                                     Text="{Binding ColorViewModel.ColorA, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="{Binding ColorViewModel.HeaderRed}"
+                                       Margin="0,20,0,0" />
+                            <Slider Minimum="0"
+                                    Maximum="255"
+                                    Value="{Binding ElementName=ColorR, Path=Text}"
+                                    IsSnapToTickEnabled="True"
+                                    TickFrequency="1"
+                                    VerticalAlignment="Center" />
+                            <TextBox Name="ColorR"
+                                     Text="{Binding ColorViewModel.ColorR, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="{Binding ColorViewModel.HeaderGreen}"
+                                       Margin="0,20,0,0" />
+                            <Slider Minimum="0"
+                                    Maximum="255"
+                                    Value="{Binding ElementName=ColorG, Path=Text}"
+                                    IsSnapToTickEnabled="True"
+                                    TickFrequency="1"
+                                    VerticalAlignment="Center" />
+                            <TextBox Name="ColorG"
+                                     Text="{Binding ColorViewModel.ColorG, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="{Binding ColorViewModel.HeaderBlue}"
+                                       Margin="0,20,0,0" />
+                            <Slider Minimum="0"
+                                    Maximum="255"
+                                    Value="{Binding ElementName=ColorB, Path=Text}"
+                                    IsSnapToTickEnabled="True"
+                                    TickFrequency="1"
+                                    VerticalAlignment="Center" />
+                            <TextBox Name="ColorB"
+                                     Text="{Binding ColorViewModel.ColorB, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="{Binding ColorViewModel.ColorArgbHexLabel}"
                                        FontSize="12"
-                                       Margin="0,10"
-                                       Foreground="DimGray" />
-                            <Button Name="ProgressBarCommand"
-                                    Content="ProgressBarCommand"
-                                    Command="{Binding ProgressBarCommand}"
-                                    HorizontalAlignment="Left"
-                                    Padding="15,5"
-                                    Margin="0,10,0,5" />
-                            <Button Name="ProgressPauseCommand"
-                                    Content="{Binding Status}"
-                                    Command="{Binding ProgressPauseCommand}"
-                                    HorizontalAlignment="Left"
-                                    Padding="15,5"
-                                    Margin="0,10,0,5" />
-                            <TextBlock Text="It fills to 100 then disappears."
-                                       FontSize="10"
-                                       Foreground="DimGray" />
-                            <ProgressBar Value="{Binding StatusPercent}"
-                                         Visibility="{Binding ProgressVisible}"
-                                         Minimum="0"
-                                         Maximum="100"
-                                         Height="5"
-                                         Margin="100,10,100,0" />
+                                       TextWrapping="Wrap"
+                                       Padding="10,8,0,0" />
+                            <TextBox Text="{Binding ColorViewModel.ColorArgbText, Mode=TwoWay}"
+                                     MaxLength="9" />
                         </StackPanel>
                     </Border>
                 </Grid>
             </TabItem>
         </TabControl>
-    </Grid>
+    </Border>
 </Window>

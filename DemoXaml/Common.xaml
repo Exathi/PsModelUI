@@ -77,24 +77,6 @@
                 Value="Transparent" />
         <Setter Property="BorderThickness"
                 Value="0" />
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="TabControl">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <StackPanel Grid.Row="0"
-                                    IsItemsHost="True"
-                                    Orientation="Horizontal"
-                                    Margin="0,0,0,10" />
-                        <ContentPresenter Grid.Row="1"
-                                          ContentSource="SelectedContent" />
-                    </Grid>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
     </Style>
 
     <Style TargetType="TabItem">
@@ -104,14 +86,12 @@
                 Value="True" />
         <Setter Property="Foreground"
                 Value="{DynamicResource TextPrimary}" />
-        <Setter Property="Margin"
-                Value="0,0,5,0" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TabItem">
                     <Border x:Name="TabBorder"
-                            CornerRadius="8"
-                            Padding="16,8"
+                            CornerRadius="8,8,0,0"
+                            Padding="8,4"
                             Background="Transparent"
                             BorderThickness="1"
                             BorderBrush="Transparent">
@@ -351,5 +331,60 @@
         </Setter>
     </Style>
 
+    <Style TargetType="Slider">
+        <Setter Property="IsSnapToTickEnabled"
+                Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Grid>
+                        <Border Name="TrackBackground"
+                                Height="4"
+                                Background="{DynamicResource ControlBackground}"
+                                CornerRadius="2"
+                                VerticalAlignment="Center" />
+                        <Track Name="PART_Track">
+
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="Slider.DecreaseLarge">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+
+                                            <Border Background="{DynamicResource FluentAccent}"
+                                                    Height="4"
+                                                    CornerRadius="2" />
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.DecreaseRepeatButton>
+
+                            <Track.Thumb>
+                                <Thumb Width="18"
+                                       Height="18">
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Ellipse Fill="{DynamicResource FluentAccent}"
+                                                     Stroke="White"
+                                                     StrokeThickness="2" />
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Track.Thumb>
+
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="Slider.IncreaseLarge">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Border Background="Transparent" />
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 
 </ResourceDictionary>
