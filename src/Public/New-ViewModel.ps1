@@ -138,11 +138,20 @@ function New-ViewModel {
         }
 
         if (($PSMethod.Body.Ast.EndBlock.Statements.Where({ $null -ne $_.Pipeline })).Count -eq 0) {
-            $null = $StringBuilder.AppendLine(('[void]{0}({1}) {{' -f $PSMethod.Name, $PSMethod.MethodParameterNames))
+            $null = $StringBuilder.Append(('[void]{0}(' -f $PSMethod.Name))
         } else {
-            $null = $StringBuilder.AppendLine(('[object]{0}({1}) {{' -f $PSMethod.Name, $PSMethod.MethodParameterNames))
+            $null = $StringBuilder.Append(('[object]{0}(' -f $PSMethod.Name))
         }
-        $null = $StringBuilder.AppendLine($($PSMethod.Body.ToString().Trim()))
+        $ParameterText = if ($PSMethod.Body.Ast.ParamBlock.Parameters.Extent.Text) {
+            $PSMethod.Body.Ast.ParamBlock.Parameters.Extent.Text -join ', '
+        } else {
+            ''
+        }
+        $null = $StringBuilder.AppendLine(('{0}) {{' -f $ParameterText))
+
+        foreach ($Statement in $PSMethod.Body.Ast.EndBlock.Statements.Extent.Text) {
+            $null = $StringBuilder.AppendLine($Statement)
+        }
         $null = $StringBuilder.AppendLine('}')
     }
 

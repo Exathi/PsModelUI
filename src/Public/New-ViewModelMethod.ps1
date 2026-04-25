@@ -9,6 +9,9 @@ function New-ViewModelMethod {
 
         .PARAMETER Body
         Body of the method to be defined in the class by New-ViewModel.
+        Uses the paramblock to define parameters that the method will receive.
+        **Paramblock is not required if the method doesn't need parameters.
+
         All `$this` references will be of the class. Otherwise it is invalid if invoked as is.
 
         .PARAMETER MethodParameterNames
@@ -26,22 +29,14 @@ function New-ViewModelMethod {
         [string]$Name,
         [Parameter(Mandatory)]
         [scriptblock]$Body,
-        [string[]]$MethodParameterNames,
         [string]$CommandName,
         [int]$Throttle = 1,
         [bool]$IsAsync = $true
     )
 
-    $Parameters = foreach ($ParameterName in $MethodParameterNames) {
-        if ($ParameterName -notmatch '^\w+$') { throw ('parameter name can only contain letters and numbers: "{0}"' -f $ParameterName) }
-        '${0}' -f $ParameterName
-    }
-    $JoinedParameters = $Parameters -join ','
-
     [pscustomobject]@{
         Name = $Name
         Body = $Body.Ast.GetScriptBlock()
-        MethodParameterNames = $JoinedParameters
         CommandName = $CommandName
         Throttle = $Throttle
         IsAsync = $IsAsync
