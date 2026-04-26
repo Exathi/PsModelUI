@@ -92,7 +92,7 @@ function New-ViewModel {
         Creates the following class:
 
         class ViewModel : ViewModelBase {
-            $_Property
+            $DoMethodCommand
             [object]DoMethod() {
                 return "hello world"
             }

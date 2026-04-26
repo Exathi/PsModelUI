@@ -2,7 +2,6 @@ function New-ViewModelMethod {
     <#
         .SYNOPSIS
         Creates a pscustomobject to be consumed by New-ViewModel to create a class method.
-        Overloads are not supported.
 
         .PARAMETER Name
         Name of the method to be defined in the class by New-ViewModel.
@@ -12,10 +11,10 @@ function New-ViewModelMethod {
         Uses the paramblock to define parameters that the method will receive.
         **Paramblock is not required if the method doesn't need parameters.
 
-        All `$this` references will be of the class. Otherwise it is invalid if invoked as is.
+        All $this references will be of the class.
 
-        .PARAMETER MethodParameterNames
-        Parameter names for the method.
+        .PARAMETER CommandName
+        If specified, a command with this name will be created as that invokes the method.
 
         .PARAMETER Throttle
         The max number of times the equivalent method command can be running at a given time.
