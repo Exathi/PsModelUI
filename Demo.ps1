@@ -23,10 +23,10 @@ $ServiceModel = New-ViewModel -ClassName 'ServiceModel' -PropertyInit @(
         Start-Sleep -Milliseconds $Random
         $this.LongTaskItem = $Random
         return $this.LongTaskItem
-    }
+    } -ExcludeCommand
     New-ViewModelMethod -Name 'SampleFunction' -Body {
         return Invoke-SampleFunction
-    }
+    } -ExcludeCommand
     New-ViewModelMethod -Name 'DotSourced' -Body {
         try {
             $DotSourcedItem = . .\DemoDotSource.ps1
@@ -34,12 +34,12 @@ $ServiceModel = New-ViewModel -ClassName 'ServiceModel' -PropertyInit @(
             Write-Warning "Method DotSourced failed. Current location is: '$PWD' and the dotsourced script isn't here. Source the fullpath or set '[Environment]::CurrentDirectory = Get-Location' before launching the gui."
         }
         return $DotSourcedItem
-    }
+    } -ExcludeCommand
     New-ViewModelMethod -Name 'ProgressBar' -Body {
         param($CurrentItem)
         Start-Sleep -Milliseconds ($CurrentItem * (Get-Random -Min 0 -Max 3))
-    }
-) -CreateMethodCommand $false -AutomaticProperties $true
+    } -ExcludeCommand
+) -AutomaticProperties $true
 
 
 $MainViewModel = New-ViewModel -ClassName 'MainViewModel' -PropertyInit @(
@@ -72,7 +72,6 @@ $LongTaskSplat = @{
         } -Throttle 0
     )
     Unbound = $true
-    CreateMethodCommand = $true
     AutomaticProperties = $true
 }
 
@@ -128,7 +127,6 @@ $AnotherTaskSplat = @{
         $AnotherTask
     )
     Unbound = $true
-    CreateMethodCommand = $true
     AutomaticProperties = $true
 }
 
@@ -147,7 +145,6 @@ $SampleFunctionSplat = @{
         }
     )
     Unbound = $true
-    CreateMethodCommand = $true
     AutomaticProperties = $true
 }
 
@@ -166,7 +163,6 @@ $DotSourcedSplat = @{
         }
     )
     Unbound = $true
-    CreateMethodCommand = $true
     AutomaticProperties = $true
 }
 
@@ -213,7 +209,6 @@ $ProgressBarSplat = @{
         } -IsAsync $false
     )
     Unbound = $true
-    CreateMethodCommand = $true
     AutomaticProperties = $true
 }
 

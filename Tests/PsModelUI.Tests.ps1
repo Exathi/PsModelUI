@@ -227,7 +227,7 @@ do'lor "
         $TestClass = New-ViewModel -ClassName 'Test' -Methods ([pscustomobject]@{
                 Name = 'ClassMethod'
                 Body = { return 'Test' }
-                MethodParameterNames = $null
+                ExcludeCommand = $false
                 Throttle = 1
                 IsAsync = $false
             })
@@ -239,7 +239,6 @@ do'lor "
         $TestClass = New-ViewModel -ClassName 'Test' -Methods ([pscustomobject]@{
                 Name = 'ClassMethod'
                 Body = { $this.ClassProperty = 'Test' }
-                MethodParameterNames = $null
                 Throttle = 1
                 IsAsync = $false
             }) -AutomaticProperties $true
@@ -249,10 +248,10 @@ do'lor "
     }
 
     It 'Creates a new class with a method without a command' {
-        $TestClass = New-ViewModel -ClassName 'Test' -CreateMethodCommand $false -Methods ([pscustomobject]@{
+        $TestClass = New-ViewModel -ClassName 'Test' -Methods ([pscustomobject]@{
                 Name = 'ClassMethod'
                 Body = { return 'Test' }
-                MethodParameterNames = $null
+                ExcludeCommand = $true
                 Throttle = 1
                 IsAsync = $false
             })
@@ -499,7 +498,6 @@ do'lor "
         $TestClass = New-Class -ClassName 'Test' -Methods ([pscustomobject]@{
                 Name = 'ClassMethod'
                 Body = { $this.ClassProperty = 'Test' }
-                MethodParameterNames = $null
             }) -AutomaticProperties $true
         $TestClass.psobject.ClassMethod()
         $TestClass.psobject._ClassProperty | Should -BeExactly 'Test'

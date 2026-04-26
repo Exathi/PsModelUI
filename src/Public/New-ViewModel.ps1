@@ -69,7 +69,8 @@ function New-ViewModel {
         Body: a scriptblock that defines the body of the method. It can reference properties defined in $PropertyInit or $PropertyDeclaration with `$this.PropertyName`.
             The paramblock defines the parameters that the method will receive.
             Can be strongly typed by defining the parameters in the paramblock with their types.
-        CommandName: if CreateMethodCommand is $true, this will be the name of the command property created for this method. If not provided, the command property will be named '{MethodName}Command'.
+        CommandName: if ExcludeCommand is $true, this will be the name of the command property created for this method. If not provided, the command property will be named '{MethodName}Command'.
+        ExcludeCommand: if $true, no command property will be created for this method.
         Throttle: the max number of times the equivalent method command can be running at a given time. Default is 1.
         IsAsync: this signals the equivalent command to be invoked in another runspace if $true or on the console thread. Default is $true.
 
@@ -101,17 +102,6 @@ function New-ViewModel {
         .PARAMETER Unbound
         Creates the class with no runspace affinity if $true. Otherwise class methods cannot be called when the UI is running if invoking async buttons.
 
-        .PARAMETER CreateMethodCommand
-        Creates a Command object for each method in $Methods that is populated with an [ActionCommand]
-        Overloads are not supported.
-
-        class ViewModel : ViewModelBase {
-            $DoMethodCommand
-            [object]DoMethod() {
-                return "hello world"
-            }
-        }
-
         .PARAMETER AutomaticProperties
         Automatically creates class properties for any $this.property reference in the method bodies that isn't already defined in $PropertyDeclaration or $PropertyInit. This is useful for quickly prototyping but it is recommended to define properties explicitly for maintainability.
 
@@ -128,7 +118,6 @@ function New-ViewModel {
         [pscustomobject[]]$PropertyInit,
         [pscustomobject[]]$Methods,
         [bool]$Unbound = $true,
-        [bool]$CreateMethodCommand = $true,
         [bool]$AutomaticProperties = $false,
         [switch]$AsString
     )
@@ -183,7 +172,7 @@ function New-ViewModel {
     # methods
     foreach ($PSMethod in $Methods) {
         # Create a command property for the method and append 'Command' to the end.
-        if ($CreateMethodCommand) {
+        if (-not $PSMethod.ExcludeCommand) {
             if ([string]::IsNullOrWhiteSpace($PSMethod.CommandName)) {
                 $null = $StringBuilder.AppendLine(('${0}Command' -f $PSMethod.Name))
             } else {
@@ -251,12 +240,12 @@ function New-ViewModel {
     }
 
     # add a command property for each method
-    if ($CreateMethodCommand) {
-        foreach ($PSMethod in $Methods) {
-            $CommandName = if ([string]::IsNullOrWhiteSpace($PSMethod.CommandName)) { "$($PSMethod.Name)Command" } else { $PSMethod.CommandName }
-            $DynamicClass."$CommandName" = New-ActionCommand -MethodName $PSMethod.Name -Target $DynamicClass -Throttle $PSMethod.Throttle -IsAsync $PSMethod.IsAsync
-        }
+    foreach ($PSMethod in $Methods) {
+        if ($PSMethod.ExcludeCommand) { continue }
+        $CommandName = if ([string]::IsNullOrWhiteSpace($PSMethod.CommandName)) { "$($PSMethod.Name)Command" } else { $PSMethod.CommandName }
+        $DynamicClass."$CommandName" = New-ActionCommand -MethodName $PSMethod.Name -Target $DynamicClass -Throttle $PSMethod.Throttle -IsAsync $PSMethod.IsAsync
     }
+
 
     if (!$script:ViewModelThread['Pool'] -or $script:ViewModelThread['Pool'].IsDisposed) { Set-ViewModelPool }
     $DynamicClass.psobject.ViewModelThread = $script:ViewModelThread

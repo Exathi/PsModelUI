@@ -16,6 +16,9 @@ function New-ViewModelMethod {
         .PARAMETER CommandName
         If specified, a command with this name will be created as that invokes the method.
 
+        .PARAMETER ExcludeCommand
+        If $true, no command will be created for this method. CommandName will be ignored if ExcludeCommand is $true.
+
         .PARAMETER Throttle
         The max number of times the equivalent method command can be running at a given time.
 
@@ -29,6 +32,7 @@ function New-ViewModelMethod {
         [Parameter(Mandatory)]
         [scriptblock]$Body,
         [string]$CommandName,
+        [switch]$ExcludeCommand,
         [int]$Throttle = 1,
         [bool]$IsAsync = $true
     )
@@ -37,6 +41,7 @@ function New-ViewModelMethod {
         Name = $Name
         Body = $Body.Ast.GetScriptBlock()
         CommandName = $CommandName
+        ExcludeCommand = $ExcludeCommand
         Throttle = $Throttle
         IsAsync = $IsAsync
     }
