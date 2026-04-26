@@ -1,4 +1,3 @@
-$DebugPreference = 'Continue'
 Import-Module .\PsModelUI
 
 function Invoke-SampleFunction {
