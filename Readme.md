@@ -1,5 +1,5 @@
 # PsModelUI - Powershell with Wpf and Databinding
-[![Static Badge](https://img.shields.io/badge/Powershell%20Gallery-1.1.1-blue)](https://www.powershellgallery.com/packages/PsModelUI/)
+[![Static Badge](https://img.shields.io/badge/Powershell%20Gallery-1.2.0-blue)](https://www.powershellgallery.com/packages/PsModelUI/)
 
 ### Challenge
 1. To write a GUI in Windows Powershell and Pwsh 7.5+
@@ -12,8 +12,7 @@ An **Asynchronous** PowerShell UI! Supported by a **ViewModel** and **Command Bi
 Revisited and simplified for Pwsh. Previous version is in the archive for those that followed it and for some obscure findings.
 
 
-<img width="1280" height="802" alt="Demo" src="https://github.com/user-attachments/assets/59c90980-47a0-400b-a943-08ee99dffede" />
-
+![Initial Demo](./Images/Inital%20Demo.gif)
 
 
 ## Check out the Demo
@@ -53,8 +52,36 @@ $Window.ShowDialog()
 
 
 ## Features
+### Data Binding
+Say hello to automatic view updates. Xaml is able to bind to class properties thanks to classes inheriting INotifyPropertyChanged.
+
+Most bindings are straight forward, just set the path to the ScriptProperty name added by `Add-Member`
+``` xml
+<TextBlock Text="{Binding TextAboveButton, Mode=OneTime}" />
+<Button Content="{Binding ButtonText, Mode=OneTime}"
+        Command="{Binding Command}" />
+<!-- The command can call $this.UpdatableContent = 'Content' to update the below control.  -->
+<TextBlock Text="{Binding UpdatableContent}" />
+```
+
+When you want text to also update another control, the text must be bound to a ScriptProperty and *NOT* have the same backing field name.
+Set the other control to bind to ElementName of the first control.
+``` xml
+<!-- Who needs converters? -->
+<TextBox Name="BinderForSlider"
+         Text="{Binding ViewModel.NumberProperty, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+<Slider Minimum="0"
+        Maximum="255"
+        Value="{Binding ElementName=BinderForSlider, Path=Text}" />
+```
+
+
+![IColor Binding](./Images/Color%20Binding.gif)
+
+
+
 ### Dynamic Class
-Building a class has never been more verbose! Ever wanted to build your own class through functions? No? Now you can, with all the cons and none of the pros.
+Building a class has never been more verbose! Ever wanted to build your own class through functions? No? Now you can!
 
 Build parts of a class until you're ready to piece it together.
 
@@ -85,7 +112,7 @@ $DynamicClassDefinition = New-ViewModel -ClassName 'DynamicClass' -PropertyIniti
 $DynamicClassDefinition
 
 class DynamicClass : ViewModelBase {
-[System.String]$ClassProperty
+[System.String]$_ClassProperty
 DynamicClass(){
 $this.ClassProperty = [scriptblock]::Create(
 @'
@@ -102,22 +129,15 @@ return 'Hello World'
 ```
 
 
-### Automatic Class Property Declaration
-`New-ViewModel` detects class properties used in class methods but not defined by `New-ClassProperty` and automatically includes it in the class as property of type object.
+## Automatic Class Property Declaration
+For quick prototyping.
+
+`New-ViewModel` detects class properties used in class methods but not defined by `New-ClassProperty` and automatically includes it in the class as property of type object. Set `-AutomaticProperties $true` to turn this feature on.
 
 ``` Powershell
-$MethodSplat = @{
-    Name = 'ClassMethod'
-    Body = {$this.AutoClassProperty = 'Hello World'}
-}
-$ClassMethod = New-ViewModelMethod @MethodSplat
-
-$ClassSplat = @{
-    ClassName = 'DynamicClass'
-    Methods = $ClassMethod
-	CreateMethodCommand = $false
-}
-$DynamicClass = New-ViewModel @ClassSplat
+$DynamicClass = New-ViewModel -ClassName 'DynamicClass' -Methods @(
+	New-ViewModelMethod -Name 'ClassMethod' -Body {$this.AutoClassProperty = 'Hello World'}
+) -CreateMethodCommand $false -AutomaticProperties $true
 $DynamicClass.psobject.ClassMethod()
 $DynamicClass
 
@@ -129,7 +149,7 @@ Hello World
 
 ## Minimal Setup Example
 
-If you want to create the ViewModel class yourself:
+The classes if you want nothing to do with the module and want to use the ViewModel class yourself:
 
 ``` Powershell
 # Pwsh7.5 - copy paste into the terminal and check it out.
@@ -198,7 +218,7 @@ $xaml.LoadXml(@'
 <Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     Title="PsModelUI 7.5" ThemeMode="Dark" WindowStartupLocation="CenterScreen" Width="640" Height="480">
-	<StackPanel HorizontalAlignment="Center">
+	<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
 		 <TextBlock Text="{Binding CustomerNameValue}" />
 		 <Button Content="Async" Command="{Binding AsyncCustomerNameCommand}" />
 		 <Button Content="Freeze" Command="{Binding CustomerNameCommand}" />
@@ -238,9 +258,9 @@ $Window.ShowDialog()
 
 ## How it works
 ### Inherit a pscustomobject
-Since classes inherit `PSCustomObject`, properties are accessed `$Class.psobject.Property`. It functions as a accessible hidden (but not private or protected) property that will show intellisense after `.psobject`.
+Since classes inherit `PSCustomObject`, properties are accessed `$Class.psobject.Property`. It functions as an accessible hidden (but not private or protected) property that will show intellisense after `.psobject`.
 
-While the xaml can bind to `$Class.psobject.Property`, there won't be a way to call PropertyChanged in property setter. The xaml can find and bind to `Add-Member -MemberType ScriptProperty`. Since we inherited `PSCustomObject`, `$Class.Property` no longer exists, therefore we can add property definitions with the same name as the internal property with Getters and Setters for use in the Xaml with `Add-Member`!
+While the xaml can bind to `$Class.psobject.Property`, there won't be a way to call PropertyChanged in property setter. The xaml can actually find and bind to `Add-Member -MemberType ScriptProperty`. The backing field must not have the same name as the script property in order for the binding to properly call the scriptblock setter.
 
 ``` Powershell
 [NoRunspaceAffinity()]
