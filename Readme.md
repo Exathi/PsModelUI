@@ -87,8 +87,8 @@ Build parts of a class until you're ready to piece it together.
 
 ``` Powershell
 $ClassMethod = New-ViewModelMethod -Name 'ClassMethod' -Body {return 'Hello World'}
-$ClassProperty = New-ClassProperty -Name 'ClassProperty' -Type ([string]) -Initialization {'I have default a value'}
-$DynamicClass = New-ViewModel -ClassName 'DynamicClass' -PropertyInitialization @(
+$ClassProperty = New-ClassProperty -Name 'ClassProperty' -Type ([string]) -Init {'I have default a value'}
+$DynamicClass = New-ViewModel -ClassName 'DynamicClass' -PropertyInit @(
 	$ClassProperty
 ) -Methods @(
 	$ClassMethod
@@ -104,7 +104,7 @@ $DynamicClass.psobject.ClassMethod()
 Hello World
 
 # Class definition as a string
-$DynamicClassDefinition = New-ViewModel -ClassName 'DynamicClass' -PropertyInitialization @(
+$DynamicClassDefinition = New-ViewModel -ClassName 'DynamicClass' -PropertyInit @(
 	$ClassProperty
 ) -Methods @(
 	$ClassMethod
