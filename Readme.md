@@ -129,7 +129,7 @@ return 'Hello World'
 ```
 
 
-## Automatic Class Property Declaration
+### Automatic Class Property Declaration
 For quick prototyping.
 
 `New-ViewModel` detects class properties used in class methods but not defined by `New-ClassProperty` and automatically includes it in the class as property of type object. Set `-AutomaticProperties $true` to turn this feature on.
@@ -149,7 +149,7 @@ Hello World
 
 ## Minimal Setup Example
 
-The classes if you want nothing to do with the module and want to use the ViewModel class yourself:
+Here are the classes if you want nothing to do with the module and want to use the ViewModel class yourself:
 
 ``` Powershell
 # Pwsh7.5 - copy paste into the terminal and check it out.
@@ -254,6 +254,10 @@ $Window.DataContext = $ViewModel
 $Window.ShowDialog()
 
 ```
+
+
+## Error Handling
+Since we're able to extract logic from the view, you can test logic separately. If needed, errors from the async call can be retrieved from $ViewModelBase.psobject.LastAction.GetAwaiter().GetResult(). Which would be the from the [ActionCommand]$Command since the button is the caller.
 
 
 ## How it works

@@ -1,4 +1,3 @@
-$DebugPreference = 'Continue'
 Import-Module .\PsModelUI
 
 function Invoke-SampleFunction {
@@ -43,7 +42,6 @@ $ServiceModel = New-ViewModel -ClassName 'ServiceModel' -PropertyInit @(
 
 
 $MainViewModel = New-ViewModel -ClassName 'MainViewModel' -PropertyInit @(
-    New-ClassProperty -Name 'Header' -Type ([string]) -Init { 'hello' }
     New-ClassProperty -Name 'LongTaskViewModel'
     New-ClassProperty -Name 'AnotherTaskViewModel'
     New-ClassProperty -Name 'SampleFunctionViewModel'

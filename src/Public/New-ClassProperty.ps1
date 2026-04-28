@@ -23,13 +23,14 @@ function New-ClassProperty {
 
         .PARAMETER ExcludePrefix
         Excludes adding an underscore "_" to the backing class property.
-        The ScriptProperty will still be created and can be used for bindings, but it won't have a backing field with the same name.
+        The ScriptProperty will still be created and can be used for bindings, and the backing field will be the same name. Used for properties that need the actual object to bind.
+        If the ScriptProperty is the same name as the backing field, the binding will use the backing field and may ignore the setter of ScriptProperty.
 
         .PARAMETER Get
         A scriptblock that overwrites the default Get of the property. The scriptblock must return the value to be retrieved.
 
         .PARAMETER Set
-        A scriptblock that overwrites the default the Set of the property. The scriptblock must have a parameter named 'value' to receive the value being set.
+        A scriptblock that overwrites the default the Set of the property. The scriptblock must have a parameter to receive the value being set.
         If used with New-ViewModel, you will need to include $this.psobject.RaisePropertyChanged("PropertyName/_PropertyName") in the scriptblock to update bindings.
 
         .EXAMPLE
