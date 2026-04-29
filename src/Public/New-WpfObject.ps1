@@ -29,13 +29,10 @@ function New-WpfObject {
     )
 
     process {
-        $Xml = [xml]::new()
         $RawXaml = if ($PSBoundParameters.ContainsKey('Path')) {
-            $Xml.Load($Path)
-            $Xml.InnerXml
+            Get-Content -Path $Path -Raw
         } else {
-            $Xml.LoadXml($Xaml)
-            $Xml.InnerXml
+            $Xaml
         }
 
         $WpfObject = [System.Windows.Markup.XamlReader]::Parse($RawXaml)
