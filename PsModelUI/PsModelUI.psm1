@@ -1,6 +1,3 @@
-Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop
-# Use an object so we can hot swap the runspacepool on calls to Set-ViewModelPool on all ViewModels if needed.
-$script:ViewModelThread = [System.Collections.Concurrent.ConcurrentDictionary[string, System.Management.Automation.Runspaces.RunspacePool]]::new()
 
 # [NoRunspaceAffinity()]
 class ViewModelBase : PSCustomObject, System.ComponentModel.INotifyPropertyChanged {
@@ -349,7 +346,7 @@ function New-Class {
         'MyClass'
 
         Creates:
-        class MyClass : ViewModeBase {
+        class MyClass : pscustomobject {
             MyClass() {}
         }
 
@@ -357,19 +354,27 @@ function New-Class {
         The name of the class to inherit and interface names.
         Follows powershell interitance so only ONE class can be inherited and any dotnet interfaces can be added.
 
-        'Foo', 'System.IDisposable', System.ComponentModel.INotifyPropertyChanged
+        .EXAMPLE
+        $Foo = New-Class -ClassName 'Foo' -Inherits 'pscustomobject', 'System.IDisposable' -PropertyDeclaration 'Bar' -Methods @(New-ClassMethod -Name Dispose -Body {})
 
         class Foo {
-            $Property = 1
+            Dispose(){}
         }
 
-        class Bar : Foo, System.IDisposable, System.ComponentModel.INotifyPropertyChanged {
-            $NewProperty = 2
+        $FooDefinition = New-Class -ClassName 'Foo' -Inherits 'pscustomobject', 'System.IDisposable' -PropertyDeclaration 'Bar' -Methods @(New-ClassMethod -Name Dispose -Body {}) -AsString
+        . ([scriptblock]::Create($FooDefinition))
+
+        $Baz = New-Class -ClassName 'Baz' -Inherits 'Foo'
+
+        class Baz : Foo {
+            $_Bar
             Dispose(){}
-            $PropertyChanged
-            add_PropertyChanged([System.ComponentModel.PropertyChangedEventHandler]$handler) {}
-            remove_PropertyChanged([System.ComponentModel.PropertyChangedEventHandler]$handler) {}
         }
+
+        .EXAMPLE
+        $FooDefinition = New-Class -ClassName 'Foo' -Inherits 'pscustomobject', 'System.IDisposable' -PropertyInit (New-ClassProperty -Name 'test' -Type 'string' -Init {'yes'})  -Methods @(New-ClassMethod -Name Dispose -Body {}) -AsString
+        . ([scriptblock]::Create($FooDefinition))
+        $Baz = New-Class -ClassName 'Baz' -Inherits 'Foo'
 
         .PARAMETER PropertyDeclaration
         Takes an array of strings.
@@ -382,18 +387,42 @@ function New-Class {
             $PropertY2
         }
 
+        .PARAMETER PropertyInit
+        A pscustomobject comprised of the below:
+
+        Name = The name of the property
+        Type = The type of the property
+        Init = A scriptblock that initializes the property in the constructor. If the scriptblock has no statements or is null, it will not be invoked.
+        Get = Optional with Set - A scriptblock that defines the get accessor of a scriptproperty
+        Set = Optional with Get - A scriptblock that defines the set accessor of a scriptproperty
+        ExcludePrefix = If $true, the property will be created without a backing field with the same name as the property instead of _propertyname
+
+        [pscustomobject]@{
+            Name = 'PropertyName'
+            Type = ([string])
+            Init = 'Hello World'
+            Get = { return $this.PropertyName }
+            Set = { param($value) $this.PropertyName = $value }
+        }
+
+        .EXAMPLE
+        New-ClassProperty -Name 'PropertyName' -Type ([string]) -Init { 'Hello World' } -Get { return $this._PropertyName } -Set { param($value) $this._PropertyName = $value }
+
+        .EXAMPLE
+        New-ClassProperty -Name 'PropertyName' -Type ([string]) -Init { 'Hello World' } -Get { return $this.PropertyName } -Set { param($value) $this.PropertyName = $value } -ExcludePrefix
+
         .PARAMETER Methods
         Will also create class properties for methods that call $this.propertyname that isn't in $PropertyDeclaration
         Requires a hashtable of name and it's Body as a scriptblock
         @(
             DoMethod = {return 'hello world'}
-            OtherMethod = {$this.Property = 'foo'} # if '$Property' is not defined in PropertyDeclaration, it will be added automatically.
+            OtherMethod = {$this.Property = 'foo'} # if '$Property' is not defined in PropertyDeclaration, it will be added automatically if AutomaticProperties = $true
         )
 
         Creates:
 
         class ViewModel : ViewModelBase {
-            $Property
+            $_Property
             [object]DoMethod() {
                 return "hello world"
             }
@@ -404,9 +433,19 @@ function New-Class {
 
         .PARAMETER Unbound
         Creates the class with no runspace affinity if $true. Otherwise class methods cannot be called when the UI is running.
+        Call with Unbound = $false to see errors, if any.
+
+        .PARAMETER AutomaticProperties
+        Automatically creates class properties for any $this.property reference in the method bodies that isn't already defined in $PropertyDeclaration or $PropertyInit. This is useful for quickly prototyping but it is recommended to define properties explicitly for maintainability.
 
         .PARAMETER AsString
         Returns the full class definition as a string instead of the object.
+
+        .PARAMETER ExcludeScriptProperty
+        Use when not inherting a pscustomobject.
+        Declares all properties as normal without add-member and without the default underscore prefix.
+        Ignores the ExcludePrefix of PropertyInit.
+
     #>
     [CmdletBinding(DefaultParameterSetName = 'AsObject')]
     param (
@@ -420,58 +459,19 @@ function New-Class {
         [pscustomobject[]]$Methods,
         [bool]$Unbound = $true,
         [bool]$AutomaticProperties = $false,
-        [switch]$AsString
+        [switch]$AsString,
+        [switch]$ExcludeScriptProperty
     )
 
     $StringBuilder = [System.Text.StringBuilder]::new()
 
     # start class line
     $null = $StringBuilder.Append("class $ClassName")
-    if ($Inherits) {
+    if (-not [string]::IsNullOrWhiteSpace($Inherits)) {
         $null = $StringBuilder.Append(' : ')
         $null = $StringBuilder.Append(($Inherits -join ','))
     }
     $null = $StringBuilder.AppendLine(' {')
-
-    # class properties
-    foreach ($Name in $PropertyDeclaration) {
-        if ($Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
-        $null = $StringBuilder.AppendLine(('$_{0}' -f $Name))
-    }
-
-    foreach ($ClassProperty in $PropertyInit) {
-        if ($ClassProperty.Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
-        if ($ClassProperty.ExcludePrefix) {
-            $null = $StringBuilder.AppendLine(('[{0}]${1}' -f $ClassProperty.Type, $ClassProperty.Name))
-        } else {
-            $null = $StringBuilder.AppendLine(('[{0}]$_{1}' -f $ClassProperty.Type, $ClassProperty.Name))
-        }
-    }
-
-    # base constructor
-    $null = $StringBuilder.AppendLine(('{0}(){{' -f $ClassName))
-
-    foreach ($ClassProperty in $PropertyInit) {
-        if ($null -eq $ClassProperty.Init -or $ClassProperty.Init.Ast.EndBlock.Statements.Count -eq 0) { continue }
-
-        if ($ClassProperty.ExcludePrefix) {
-            $BackingFieldName = "psobject.$($ClassProperty.Name)"
-        } else {
-            $BackingFieldName = "psobject._$($ClassProperty.Name)"
-        }
-
-        $RawText = @"
-`$this.$BackingFieldName = [scriptblock]::Create(
-@'
-,($($ClassProperty.Init.ToString()))
-'@
-).InvokeReturnAsIs()
-"@
-        $null = $StringBuilder.AppendLine($RawText)
-    }
-
-    $null = $StringBuilder.AppendLine(('}}' -f $ClassName))
-
 
     # methods
     foreach ($PSMethod in $Methods) {
@@ -493,6 +493,94 @@ function New-Class {
         $null = $StringBuilder.AppendLine('}')
     }
 
+    # class properties
+    foreach ($Name in $PropertyDeclaration) {
+        if ($Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
+        if ($ExcludeScriptProperty) {
+            $null = $StringBuilder.AppendLine(('${0}' -f $Name))
+        } else {
+            $null = $StringBuilder.AppendLine(('$_{0}' -f $Name))
+        }
+    }
+
+    foreach ($ClassProperty in $PropertyInit) {
+        if ($ClassProperty.Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
+        if ($ExcludeScriptProperty) {
+            $null = $StringBuilder.AppendLine(('[{0}]${1}' -f $ClassProperty.Type, $ClassProperty.Name))
+        } else {
+            if ($ClassProperty.ExcludePrefix) {
+                $null = $StringBuilder.AppendLine(('[{0}]${1}' -f $ClassProperty.Type, $ClassProperty.Name))
+            } else {
+                $null = $StringBuilder.AppendLine(('[{0}]$_{1}' -f $ClassProperty.Type, $ClassProperty.Name))
+            }
+        }
+    }
+
+    # base constructor
+    $null = $StringBuilder.AppendLine(('{0}(){{' -f $ClassName))
+
+    foreach ($ClassProperty in $PropertyInit) {
+        if ($null -eq $ClassProperty.Init -or $ClassProperty.Init.Ast.EndBlock.Statements.Count -eq 0) { continue }
+
+        if ($ClassProperty.ExcludePrefix) {
+            $BackingFieldName = "psobject.$($ClassProperty.Name)"
+        } else {
+            $BackingFieldName = "psobject._$($ClassProperty.Name)"
+        }
+
+        if ($ExcludeScriptProperty) {
+            $BackingFieldName = $ClassProperty.Name
+        }
+
+        $RawText = @"
+`$this.$BackingFieldName = [scriptblock]::Create(
+@'
+,($($ClassProperty.Init.ToString()))
+'@
+).InvokeReturnAsIs()
+"@
+        $null = $StringBuilder.AppendLine($RawText)
+    }
+
+    $ConstructorScriptProperties = $PropertyDeclaration -join '","'
+    if ((-not [string]::IsNullOrWhiteSpace($ConstructorScriptProperties) -and -not $ExcludeScriptProperty) ) {
+        $null = $StringBuilder.Append('foreach ($ClassProperty in @("')
+        $null = $StringBuilder.Append($ConstructorScriptProperties)
+        $null = $StringBuilder.AppendLine('")) {')
+        $null = $StringBuilder.AppendLine(@'
+    $ProperName = $ClassProperty
+    $Splat = @{
+        Name = $ProperName
+        MemberType = 'ScriptProperty'
+        Value = [scriptblock]::Create('return ,$this.psobject.{0}' -f $ClassProperty)
+        SecondValue = [scriptblock]::Create(('param($value)
+            $this.psobject.{0} = $value' -f $ClassProperty, $ProperName)
+        )
+    }
+    $this | Add-Member @Splat
+}
+'@)
+    }
+
+    foreach ($ClassProperty in $PropertyInit) {
+        $BackingFieldName = if ($ClassProperty.ExcludePrefix) {
+            $ClassProperty.Name
+        } else {
+            "_$($ClassProperty.Name)"
+        }
+        if ($ClassProperty.Get -and $ClassProperty.Set) {
+            $null = $StringBuilder.Append(('$this | Add-Member -MemberType ScriptProperty -Name {0} -Value {{{1}}} -SecondValue {{{2}}}' -f $ClassProperty.Name, $ClassProperty.Get.Ast.GetScriptBlock(), $ClassProperty.Set.Ast.GetScriptBlock()))
+        } else {
+            if (-not $ExcludeScriptProperty) {
+                $null = $StringBuilder.Append(('$this | Add-Member -MemberType ScriptProperty -Name {0} -Value {{{1}}} -SecondValue {{{2}}}' -f $ClassProperty.Name, ('return ,$this.psobject.{0}' -f $BackingFieldName), ('param($value)
+            $this.psobject.{0} = $value' -f $BackingFieldName)))
+            }
+        }
+    }
+
+    # end constructor
+    $null = $StringBuilder.AppendLine('}')
+
     # end class definition
     $null = $StringBuilder.AppendLine('}')
 
@@ -503,18 +591,36 @@ function New-Class {
         $ClassProperties = $PreliminaryDefinition.Ast.FindAll({ $args[0] -is [System.Management.Automation.Language.VariableExpressionAst] }, $true) | Where-Object { $_.VariablePath.UserPath -eq 'this' }
 
         # remove the newline and closing brace to add $this variables as properties from methods.
-        $null = $StringBuilder.Remove($StringBuilder.Length - 3, 3)
+        $null = $StringBuilder.Remove($StringBuilder.Length - 6, 6)
 
         # get all unique $this properties and add them as $property if not added in $PropertyDeclaration
         foreach ($ClassProperty in $ClassProperties.Parent.Member.Extent.Text) {
             if ([string]::IsNullOrWhiteSpace($ClassProperty)) { continue }
             if ($PropertyDeclaration -contains $ClassProperty) { continue }
             if ($PropertyInit.Name -contains $ClassProperty) { continue }
+            if ($PropertyInit.Name -contains $ClassProperty) { continue }
+            if ($ClassProperty -eq 'psobject') { continue }
             $null = $UniqueProperties.Add($ClassProperty)
         }
 
+        $null = $StringBuilder.AppendLine()
+
+        if (-not $ExcludeScriptProperty) {
+            foreach ($ClassProperty in $UniqueProperties.GetEnumerator()) {
+                $null = $StringBuilder.AppendLine(('$this | Add-Member -MemberType ScriptProperty -Name {0} -Value {{{1}}} -SecondValue {{{2}}}' -f $ClassProperty, ('return ,$this.psobject.{0}' -f "_$ClassProperty"), ('param($value)
+            $this.psobject.{0} = $value' -f "_$ClassProperty")))
+            }
+        }
+
+        # end constructor
+        $null = $StringBuilder.AppendLine('}')
+
         foreach ($ClassProperty in $UniqueProperties.GetEnumerator()) {
-            $null = $StringBuilder.AppendLine('$_{0}' -f $ClassProperty)
+            if ($ExcludeScriptProperty) {
+                $null = $StringBuilder.AppendLine('${0}' -f $ClassProperty)
+            } else {
+                $null = $StringBuilder.AppendLine('$_{0}' -f $ClassProperty)
+            }
         }
 
         # end class definition
@@ -532,54 +638,6 @@ function New-Class {
         New-UnboundClassInstance $ClassName
     } else {
         [activator]::CreateInstance($ClassName)
-    }
-
-    foreach ($ClassProperty in $PropertyDeclaration) {
-        $ProperName = if ($ClassProperty.StartsWith('_')) { $ClassProperty.Remove(0, 1) } else { $ClassProperty }
-        $Splat = @{
-            Name = $ProperName
-            MemberType = 'ScriptProperty'
-            Value = [scriptblock]::Create('return ,$this.psobject.{0}' -f $ClassProperty)
-            SecondValue = [scriptblock]::Create(('param($value)
-                $this.psobject.{0} = $value
-                $this.psobject.RaisePropertyChanged("{1}")' -f $ClassProperty, $ProperName)
-            )
-        }
-        $DynamicClass | Add-Member @Splat
-    }
-
-    foreach ($ClassProperty in $PropertyInit) {
-        if ($ClassProperty.Get -and $ClassProperty.Set) {
-            $DynamicClass | Add-Member -MemberType ScriptProperty -Name $ClassProperty.Name -Value $ClassProperty.Get.Ast.GetScriptBlock() -SecondValue $ClassProperty.Set.Ast.GetScriptBlock() -Force
-        } else {
-            if ($ClassProperty.ExcludePrefix) {
-                $BackingFieldName = $ClassProperty.Name
-            } else {
-                $BackingFieldName = "_$($ClassProperty.Name)"
-            }
-            $Splat = @{
-                Name = $ClassProperty.Name
-                MemberType = 'ScriptProperty'
-                Value = [scriptblock]::Create('return ,$this.psobject.{0}' -f $BackingFieldName)
-                SecondValue = [scriptblock]::Create(('param($value)
-                        $this.psobject.{0} = $value' -f $BackingFieldName)
-                )
-            }
-            $DynamicClass | Add-Member @Splat
-        }
-    }
-
-    foreach ($ClassProperty in $UniqueProperties.GetEnumerator()) {
-        $ProperName = "_$ClassProperty"
-        $Splat = @{
-            Name = $ClassProperty
-            MemberType = 'ScriptProperty'
-            Value = [scriptblock]::Create('return ,$this.psobject.{0}' -f $ProperName)
-            SecondValue = [scriptblock]::Create(('param($value)
-                        $this.psobject.{0} = $value' -f $ProperName)
-            )
-        }
-        $DynamicClass | Add-Member @Splat
     }
 
     $DynamicClass
@@ -641,13 +699,16 @@ function New-ClassProperty {
 
         .PARAMETER ExcludePrefix
         Excludes adding an underscore "_" to the backing class property.
-        The ScriptProperty will still be created and can be used for bindings, but it won't have a backing field with the same name.
+        Used for properties that need the actual object to bind since Add-Member value/secondvalue only return an object and not a guaranteed type.
+        If the ScriptProperty is the same name as the backing field, the binding will use the backing field and may ignore the setter of ScriptProperty.
+
+        **Bind as usual and a converter or bind to the _underlying object. Should only be needed for ILists/IEnumberable.
 
         .PARAMETER Get
         A scriptblock that overwrites the default Get of the property. The scriptblock must return the value to be retrieved.
 
         .PARAMETER Set
-        A scriptblock that overwrites the default the Set of the property. The scriptblock must have a parameter named 'value' to receive the value being set.
+        A scriptblock that overwrites the default the Set of the property. The scriptblock must have a parameter to receive the value being set.
         If used with New-ViewModel, you will need to include $this.psobject.RaisePropertyChanged("PropertyName/_PropertyName") in the scriptblock to update bindings.
 
         .EXAMPLE
@@ -688,6 +749,31 @@ function New-ClassProperty {
         Get = if ($Get.Ast.EndBlock.Statements.Count -gt 0) { $Get } else { $null }
         Set = if ($Set.Ast.EndBlock.Statements.Count -gt 0) { $Set } else { $null }
     }
+}
+
+function New-ModelWindow {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        $ViewModel,
+        $Content
+    )
+
+    $StringBuilder = [System.Text.StringBuilder]::new()
+
+    $null = $StringBuilder.AppendLine('<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PsModelUI"
+        ThemeMode="Light"
+        WindowStartupLocation="CenterScreen">
+')
+
+    $null = $StringBuilder.AppendLine($Content)
+
+    $null = $StringBuilder.AppendLine('</Window>')
+
+    $Window = New-WpfObject -Xaml $StringBuilder.ToString() -DataContext $ViewModel
+    $Window.ShowDialog()
 }
 
 function New-ViewModel {
@@ -743,7 +829,7 @@ function New-ViewModel {
             It can reference other properties defined in $PropertyInit or $PropertyDeclaration with `$this.PropertyName`.
             It will be invoked in the constructor of the class so it can also reference other properties defined in the same $PropertyInit array.
         ExcludePrefix: if $true, the backing property will be created without the '_' prefix.
-            This is useful for properties that need to be a the same backing name for binding purposes.
+            Only used for consistency in binding name rather than binding to _name vs just name.
         Get: A scriptblock that defines the get accessor of the property. It can reference other properties defined in $PropertyInit or $PropertyDeclaration with `$this.PropertyName`.
         Set: A scriptblock that defines the set accessor of the property. It can reference other properties defined in $PropertyInit or $PropertyDeclaration with `$this.PropertyName`.
 
@@ -1033,13 +1119,10 @@ function New-WpfObject {
     )
 
     process {
-        $Xml = [xml]::new()
         $RawXaml = if ($PSBoundParameters.ContainsKey('Path')) {
-            $Xml.Load($Path)
-            $Xml.InnerXml
+            Get-Content -Path $Path -Raw
         } else {
-            $Xml.LoadXml($Xaml)
-            $Xml.InnerXml
+            $Xaml
         }
 
         $WpfObject = [System.Windows.Markup.XamlReader]::Parse($RawXaml)
@@ -1053,6 +1136,9 @@ function New-WpfObject {
         $WpfObject
     }
 }
+
+# Use an object so we can hot swap the runspacepool on calls to Set-ViewModelPool on all ViewModels if needed.
+$script:ViewModelThread = [System.Collections.Concurrent.ConcurrentDictionary[string, System.Management.Automation.Runspaces.RunspacePool]]::new()
 
 function Set-ViewModelPool {
     <#

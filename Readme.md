@@ -1,5 +1,5 @@
 # PsModelUI - Powershell with Wpf and Databinding
-[![Static Badge](https://img.shields.io/badge/Powershell%20Gallery-1.2.0-blue)](https://www.powershellgallery.com/packages/PsModelUI/)
+[![Static Badge](https://img.shields.io/badge/Powershell%20Gallery-1.2.1-blue)](https://www.powershellgallery.com/packages/PsModelUI/)
 
 ### Challenge
 1. To write a GUI in Windows Powershell and Pwsh 7.5+
