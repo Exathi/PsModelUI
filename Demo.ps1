@@ -14,32 +14,31 @@ Set-ViewModelPool -Functions @(
 )
 
 
-$ServiceModel = New-ViewModel -ClassName 'ServiceModel' -PropertyInit @(
+$ServiceModel = New-Class -ClassName 'ServiceModel' -PropertyInit @(
     New-ClassProperty -Name LongTaskItem -Type ([int])
 ) -Methods @(
-    New-ViewModelMethod -Name 'NewItem' -Body {
+    New-ClassMethod -Name 'NewItem' -Body {
         $Random = Get-Random -Min 100 -Max 5000
         Start-Sleep -Milliseconds $Random
         $this.LongTaskItem = $Random
         return $this.LongTaskItem
-    } -ExcludeCommand
-    New-ViewModelMethod -Name 'SampleFunction' -Body {
+    }
+    New-ClassMethod -Name 'SampleFunction' -Body {
         return Invoke-SampleFunction
-    } -ExcludeCommand
-    New-ViewModelMethod -Name 'DotSourced' -Body {
+    }
+    New-ClassMethod -Name 'DotSourced' -Body {
         try {
             $DotSourcedItem = . .\DemoDotSource.ps1
         } catch {
             Write-Warning "Method DotSourced failed. Current location is: '$PWD' and the dotsourced script isn't here. Source the fullpath or set '[Environment]::CurrentDirectory = Get-Location' before launching the gui."
         }
         return $DotSourcedItem
-    } -ExcludeCommand
-    New-ViewModelMethod -Name 'ProgressBar' -Body {
-        param($CurrentItem)
+    }
+    New-ClassMethod -Name 'ProgressBar' -Body {
+        param([int]$CurrentItem)
         Start-Sleep -Milliseconds ($CurrentItem * (Get-Random -Min 0 -Max 3))
-    } -ExcludeCommand
-) -AutomaticProperties $true
-
+    }
+) -AutomaticProperties $true -ExcludeScriptProperty -Inherits $null
 
 $MainViewModel = New-ViewModel -ClassName 'MainViewModel' -PropertyInit @(
     New-ClassProperty -Name 'LongTaskViewModel'
@@ -66,7 +65,7 @@ $LongTaskSplat = @{
     )
     Methods = @(
         New-ViewModelMethod -Name 'LongTask' -CommandName 'Command' -Body {
-            $this.UpdatableContent = $this.ServiceModel.psobject.NewItem()
+            $this.UpdatableContent = $this.ServiceModel.NewItem()
         } -Throttle 0
     )
     Unbound = $true
@@ -119,7 +118,7 @@ $AnotherTaskSplat = @{
         New-ClassProperty -Name GridContentLock -Type ([object]) -Init { [object]::new() }
         New-ClassProperty -Name GridContent -Type ([System.Collections.ObjectModel.ObservableCollection[Object]]) -Init { [System.Collections.ObjectModel.ObservableCollection[Object]]::new() } -ExcludePrefix
         New-ClassProperty -Name ButtonText -Type ([string]) -Init { 'AnotherTaskCommand' }
-        New-ClassProperty -Name FooterNote -Type ([string]) -Init { 'Some bindings may require a backing field with the same name as the ScriptProperty.' }
+        New-ClassProperty -Name FooterNote -Type ([string]) -Init { 'Some bindings require the actual property instead of the ScriptProperty because the getter returns an object instead of the typed object.' }
     )
     Methods = @(
         $AnotherTask
@@ -139,7 +138,7 @@ $SampleFunctionSplat = @{
     )
     Methods = @(
         New-ViewModelMethod -Name 'SampleFunction' -CommandName 'Command' -Body {
-            $this.UpdatableContent = $this.ServiceModel.psobject.SampleFunction()
+            $this.UpdatableContent = $this.ServiceModel.SampleFunction()
         }
     )
     Unbound = $true
@@ -157,7 +156,7 @@ $DotSourcedSplat = @{
     )
     Methods = @(
         New-ViewModelMethod -Name 'DotSourced' -CommandName 'Command' -Body {
-            $this.UpdatableContent = $this.ServiceModel.psobject.DotSourced()
+            $this.UpdatableContent = $this.ServiceModel.DotSourced()
         }
     )
     Unbound = $true
@@ -189,7 +188,7 @@ $ProgressBarSplat = @{
                     Start-Sleep -Milliseconds 100
                 }
 
-                $this.ServiceModel.psobject.ProgressBar($_)
+                $this.ServiceModel.ProgressBar($_)
 
                 $Progress = ($_ / $End * 100)
                 $this.UpdatableContent = $Progress
