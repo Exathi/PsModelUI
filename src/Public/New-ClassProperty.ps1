@@ -23,8 +23,10 @@ function New-ClassProperty {
 
         .PARAMETER ExcludePrefix
         Excludes adding an underscore "_" to the backing class property.
-        The ScriptProperty will still be created and can be used for bindings, and the backing field will be the same name. Used for properties that need the actual object to bind.
+        Used for properties that need the actual object to bind since Add-Member value/secondvalue only return an object and not a guaranteed type.
         If the ScriptProperty is the same name as the backing field, the binding will use the backing field and may ignore the setter of ScriptProperty.
+
+        **Bind as usual and a converter or bind to the _underlying object. Should only be needed for ILists/IEnumberable.
 
         .PARAMETER Get
         A scriptblock that overwrites the default Get of the property. The scriptblock must return the value to be retrieved.

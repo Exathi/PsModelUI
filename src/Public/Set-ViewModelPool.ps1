@@ -1,3 +1,6 @@
+# Use an object so we can hot swap the runspacepool on calls to Set-ViewModelPool on all ViewModels if needed.
+$script:ViewModelThread = [System.Collections.Concurrent.ConcurrentDictionary[string, System.Management.Automation.Runspaces.RunspacePool]]::new()
+
 function Set-ViewModelPool {
     <#
         .SYNOPSIS

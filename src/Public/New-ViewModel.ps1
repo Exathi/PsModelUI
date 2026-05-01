@@ -51,7 +51,7 @@ function New-ViewModel {
             It can reference other properties defined in $PropertyInit or $PropertyDeclaration with `$this.PropertyName`.
             It will be invoked in the constructor of the class so it can also reference other properties defined in the same $PropertyInit array.
         ExcludePrefix: if $true, the backing property will be created without the '_' prefix.
-            This is useful for properties that need to be a the same backing name for binding purposes.
+            Only used for consistency in binding name rather than binding to _name vs just name.
         Get: A scriptblock that defines the get accessor of the property. It can reference other properties defined in $PropertyInit or $PropertyDeclaration with `$this.PropertyName`.
         Set: A scriptblock that defines the set accessor of the property. It can reference other properties defined in $PropertyInit or $PropertyDeclaration with `$this.PropertyName`.
 
