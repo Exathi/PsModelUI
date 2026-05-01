@@ -1,4 +1,4 @@
-
+Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop
 # [NoRunspaceAffinity()]
 class ViewModelBase : PSCustomObject, System.ComponentModel.INotifyPropertyChanged {
     # INotifyPropertyChanged Implementation

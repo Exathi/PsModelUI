@@ -1,7 +1,7 @@
 $ModuleName = 'PsModelUI'
 $ModuleFolder = Join-Path -Path $PSScriptRoot -ChildPath $ModuleName
 $RootModule = Join-Path -Path $ModuleFolder -ChildPath "$($ModuleName).psm1"
-'' | Out-File -FilePath $RootModule -Encoding 'utf8NoBOM'
+'Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop' | Out-File -FilePath $RootModule -Encoding 'utf8NoBOM'
 
 $BasePath = Join-Path -Path $PSScriptRoot -ChildPath 'src'
 $ClassesPath = Join-Path -Path $BasePath -ChildPath 'Classes'
