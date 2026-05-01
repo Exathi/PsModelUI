@@ -168,7 +168,7 @@ $ProgressBarSplat = @{
     ClassName = 'ProgressBarViewModel'
     PropertyInit = @(
         New-ClassProperty -Name Header -Type ([string]) -Init { 'ProgressBar' }
-        New-ClassProperty -Name BodyText -Type ([string]) -Init { 'This will call $ServiceModel.psobject.Progressbar and display a progress bar of the completion percent.' }
+        New-ClassProperty -Name BodyText -Type ([string]) -Init { 'This will call $ServiceModel.Progressbar and display a progress bar of the completion percent.' }
         New-ClassProperty -Name UpdatableContent -Type ([string]) -Init { '' }
         New-ClassProperty -Name ButtonText -Type ([string]) -Init { 'ProgressBarCommand' }
         New-ClassProperty -Name FooterNote -Type ([string]) -Init { 'For when you do or do not know how long it will take.' }
