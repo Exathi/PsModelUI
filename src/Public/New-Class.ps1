@@ -65,6 +65,30 @@ function New-Class {
             $PropertY2
         }
 
+        .PARAMETER PropertyInit
+        A pscustomobject comprised of the below:
+
+        Name = The name of the property
+        Type = The type of the property
+        Init = A scriptblock that initializes the property in the constructor. If the scriptblock has no statements or is null, it will not be invoked.
+        Get = Optional with Set - A scriptblock that defines the get accessor of a scriptproperty
+        Set = Optional with Get - A scriptblock that defines the set accessor of a scriptproperty
+        ExcludePrefix = If $true, the property will be created without a backing field with the same name as the property instead of _propertyname
+
+        [pscustomobject]@{
+            Name = 'PropertyName'
+            Type = ([string])
+            Init = 'Hello World'
+            Get = { return $this.PropertyName }
+            Set = { param($value) $this.PropertyName = $value }
+        }
+
+        .EXAMPLE
+        New-ClassProperty -Name 'PropertyName' -Type ([string]) -Init { 'Hello World' } -Get { return $this._PropertyName } -Set { param($value) $this._PropertyName = $value }
+
+        .EXAMPLE
+        New-ClassProperty -Name 'PropertyName' -Type ([string]) -Init { 'Hello World' } -Get { return $this.PropertyName } -Set { param($value) $this.PropertyName = $value } -ExcludePrefix
+
         .PARAMETER Methods
         Will also create class properties for methods that call $this.propertyname that isn't in $PropertyDeclaration
         Requires a hashtable of name and it's Body as a scriptblock
@@ -89,8 +113,17 @@ function New-Class {
         Creates the class with no runspace affinity if $true. Otherwise class methods cannot be called when the UI is running.
         Call with Unbound = $false to see errors, if any.
 
+        .PARAMETER AutomaticProperties
+        Automatically creates class properties for any $this.property reference in the method bodies that isn't already defined in $PropertyDeclaration or $PropertyInit. This is useful for quickly prototyping but it is recommended to define properties explicitly for maintainability.
+
         .PARAMETER AsString
         Returns the full class definition as a string instead of the object.
+
+        .PARAMETER ExcludeScriptProperty
+        Use when not inherting a pscustomobject.
+        Declares all properties as normal without add-member and without the default underscore prefix.
+        Ignores the ExcludePrefix of PropertyInit.
+
     #>
     [CmdletBinding(DefaultParameterSetName = 'AsObject')]
     param (
@@ -104,7 +137,8 @@ function New-Class {
         [pscustomobject[]]$Methods,
         [bool]$Unbound = $true,
         [bool]$AutomaticProperties = $false,
-        [switch]$AsString
+        [switch]$AsString,
+        [switch]$ExcludeScriptProperty
     )
 
     $StringBuilder = [System.Text.StringBuilder]::new()
@@ -140,15 +174,23 @@ function New-Class {
     # class properties
     foreach ($Name in $PropertyDeclaration) {
         if ($Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
-        $null = $StringBuilder.AppendLine(('$_{0}' -f $Name))
+        if ($ExcludeScriptProperty) {
+            $null = $StringBuilder.AppendLine(('${0}' -f $Name))
+        } else {
+            $null = $StringBuilder.AppendLine(('$_{0}' -f $Name))
+        }
     }
 
     foreach ($ClassProperty in $PropertyInit) {
         if ($ClassProperty.Name -notmatch '^\w+$') { throw 'property name can only contain letters and numbers' }
-        if ($ClassProperty.ExcludePrefix) {
+        if ($ExcludeScriptProperty) {
             $null = $StringBuilder.AppendLine(('[{0}]${1}' -f $ClassProperty.Type, $ClassProperty.Name))
         } else {
-            $null = $StringBuilder.AppendLine(('[{0}]$_{1}' -f $ClassProperty.Type, $ClassProperty.Name))
+            if ($ClassProperty.ExcludePrefix) {
+                $null = $StringBuilder.AppendLine(('[{0}]${1}' -f $ClassProperty.Type, $ClassProperty.Name))
+            } else {
+                $null = $StringBuilder.AppendLine(('[{0}]$_{1}' -f $ClassProperty.Type, $ClassProperty.Name))
+            }
         }
     }
 
@@ -164,6 +206,10 @@ function New-Class {
             $BackingFieldName = "psobject._$($ClassProperty.Name)"
         }
 
+        if ($ExcludeScriptProperty) {
+            $BackingFieldName = $ClassProperty.Name
+        }
+
         $RawText = @"
 `$this.$BackingFieldName = [scriptblock]::Create(
 @'
@@ -175,7 +221,7 @@ function New-Class {
     }
 
     $ConstructorScriptProperties = $PropertyDeclaration -join '","'
-    if (-not [string]::IsNullOrWhiteSpace($ConstructorScriptProperties) ) {
+    if ((-not [string]::IsNullOrWhiteSpace($ConstructorScriptProperties) -and -not $ExcludeScriptProperty) ) {
         $null = $StringBuilder.Append('foreach ($ClassProperty in @("')
         $null = $StringBuilder.Append($ConstructorScriptProperties)
         $null = $StringBuilder.AppendLine('")) {')
@@ -203,8 +249,10 @@ function New-Class {
         if ($ClassProperty.Get -and $ClassProperty.Set) {
             $null = $StringBuilder.Append(('$this | Add-Member -MemberType ScriptProperty -Name {0} -Value {{{1}}} -SecondValue {{{2}}}' -f $ClassProperty.Name, $ClassProperty.Get.Ast.GetScriptBlock(), $ClassProperty.Set.Ast.GetScriptBlock()))
         } else {
-            $null = $StringBuilder.Append(('$this | Add-Member -MemberType ScriptProperty -Name {0} -Value {{{1}}} -SecondValue {{{2}}}' -f $ClassProperty.Name, ('return ,$this.psobject.{0}' -f $BackingFieldName), ('param($value)
+            if (-not $ExcludeScriptProperty) {
+                $null = $StringBuilder.Append(('$this | Add-Member -MemberType ScriptProperty -Name {0} -Value {{{1}}} -SecondValue {{{2}}}' -f $ClassProperty.Name, ('return ,$this.psobject.{0}' -f $BackingFieldName), ('param($value)
             $this.psobject.{0} = $value' -f $BackingFieldName)))
+            }
         }
     }
 
@@ -235,16 +283,22 @@ function New-Class {
 
         $null = $StringBuilder.AppendLine()
 
-        foreach ($ClassProperty in $UniqueProperties.GetEnumerator()) {
-            $null = $StringBuilder.AppendLine(('$this | Add-Member -MemberType ScriptProperty -Name {0} -Value {{{1}}} -SecondValue {{{2}}}' -f $ClassProperty, ('return ,$this.psobject.{0}' -f "_$ClassProperty"), ('param($value)
+        if (-not $ExcludeScriptProperty) {
+            foreach ($ClassProperty in $UniqueProperties.GetEnumerator()) {
+                $null = $StringBuilder.AppendLine(('$this | Add-Member -MemberType ScriptProperty -Name {0} -Value {{{1}}} -SecondValue {{{2}}}' -f $ClassProperty, ('return ,$this.psobject.{0}' -f "_$ClassProperty"), ('param($value)
             $this.psobject.{0} = $value' -f "_$ClassProperty")))
+            }
         }
 
         # end constructor
         $null = $StringBuilder.AppendLine('}')
 
         foreach ($ClassProperty in $UniqueProperties.GetEnumerator()) {
-            $null = $StringBuilder.AppendLine('$_{0}' -f $ClassProperty)
+            if ($ExcludeScriptProperty) {
+                $null = $StringBuilder.AppendLine('${0}' -f $ClassProperty)
+            } else {
+                $null = $StringBuilder.AppendLine('$_{0}' -f $ClassProperty)
+            }
         }
 
         # end class definition
